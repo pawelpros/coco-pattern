@@ -9,6 +9,9 @@ metadata:
 spec:
   kernelArguments:
   - nohibernate
+{{- if $.Values.tdx.enabled }}
+  - kvm_intel.tdx=1
+{{- end }}
   config:
     ignition:
       version: 3.2.0

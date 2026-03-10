@@ -1,1 +1,2 @@
-# No configurable values — platform resources use fixed configurations.
+tdx:
+  enabled: true

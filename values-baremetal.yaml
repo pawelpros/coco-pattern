@@ -19,6 +19,7 @@ clusterGroup:
   - openshift-storage
   - openshift-nfd
   - baremetal
+  - intel-dcap
 
   subscriptions:
     acm:
@@ -145,6 +146,17 @@ clusterGroup:
         - name: enablePeerPods
           value: "false"
 
+
+    intel-dcap:
+      name: intel-dcap
+      namespace: intel-dcap
+      project: hub
+      path: charts/all/intel-dcap
+      overrides:
+        - name: secretStore.name
+          value: vault-backend
+        - name: secretStore.kind
+          value: ClusterSecretStore
 
     sandbox-policies:
       name: sandbox-policies
