@@ -1,5 +1,6 @@
 global:
   pattern: coco-pattern
+  storageProvider: hpp  # Options: hpp, lvm, external
   secretStore:
     # Warning: This must be present even if it is set to none.
     backend: vault # none, vault, kubernetes
@@ -13,6 +14,7 @@ global:
   coco:
     securityPolicyFlavour: "insecure" # insecure, signed or reject is expected.
     secured: true # true or false. If true, the cluster will be secured. If false, the cluster will be insecure.
+    bypassAttestation: false # Set true for bare metal (skips PCR/initdata/RVPS)
     # Enable SSH key injection into podvm for debugging. Do not enable in production.
     # Also requires: COCO_ENABLE_SSH_DEBUG=true ./scripts/gen-secrets.sh
     # and uncommenting the sshKey block in values-secret.yaml.template.
@@ -24,7 +26,7 @@ main:
   # WARNING
   # This default configuration uses a single cluster on azure.
   # It fundamentally violates the separation of duties.
-  clusterGroupName: simple
+  clusterGroupName: baremetal
   multiSourceConfig:
     enabled: true
     clusterGroupChartVersion: 0.9.*

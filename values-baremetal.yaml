@@ -1,0 +1,200 @@
+# Bare metal deployment for confidential containers.
+# Supports Intel TDX and AMD SEV-SNP via auto-detection (NFD).
+# Set main.clusterGroupName: baremetal in values-global.yaml to use.
+
+clusterGroup:
+  name: baremetal
+  isHubCluster: true
+  namespaces:
+  - open-cluster-management
+  - vault
+  - golang-external-secrets
+  - openshift-sandboxed-containers-operator
+  - trustee-operator-system
+  - cert-manager-operator
+  - cert-manager
+  - hello-openshift
+  - kbs-access
+  - openshift-cnv
+  - openshift-storage
+  - openshift-nfd
+  - baremetal
+
+  subscriptions:
+    acm:
+      name: advanced-cluster-management
+      namespace: open-cluster-management
+    sandbox:
+      name: sandboxed-containers-operator
+      namespace: openshift-sandboxed-containers-operator
+      source: redhat-operators
+      channel: stable
+      installPlanApproval: Manual
+      csv: sandboxed-containers-operator.v1.11.0
+    trustee:
+      name: trustee-operator
+      namespace: trustee-operator-system
+      source: redhat-operators
+      channel: stable
+      installPlanApproval: Manual
+      csv: trustee-operator.v1.0.0
+    cert-manager:
+      name: openshift-cert-manager-operator
+      namespace: cert-manager-operator
+      channel: stable-v1
+    lvm-operator:
+      name: lvms-operator
+      namespace: openshift-storage
+      source: redhat-operators
+      channel: stable-4.20
+      installPlanApproval: Automatic
+    cnv:
+      name: kubevirt-hyperconverged
+      namespace: openshift-cnv
+      source: redhat-operators
+      channel: stable
+      installPlanApproval: Automatic
+    nfd:
+      name: nfd
+      namespace: openshift-nfd
+      channel: stable
+  projects:
+  - hub
+  - vault
+  - trustee
+  - golang-external-secrets
+  - sandbox
+  - workloads
+  - default
+
+  # Explicitly mention the cluster-state based overrides we plan to use for this pattern.
+  # We can use self-referential variables because the chart calls the tpl function with these variables defined
+  sharedValueFiles:
+  - '/overrides/values-{{ $.Values.global.clusterPlatform }}.yaml'
+  - '/overrides/values-storage-{{ $.Values.global.storageProvider }}.yaml'
+
+  applications:
+    acm:
+      name: acm
+      namespace: open-cluster-management
+      project: hub
+      chart: acm
+      chartVersion: 0.1.*
+
+    vault:
+      name: vault
+      namespace: vault
+      project: vault
+      chart: hashicorp-vault
+      chartVersion: 0.1.*
+
+    secrets-operator:
+      name: golang-external-secrets
+      namespace: golang-external-secrets
+      project: golang-external-secrets
+      chart: golang-external-secrets
+      chartVersion: 0.1.*
+
+    trustee:
+      name: trustee
+      namespace: trustee-operator-system
+      project: trustee
+      repoURL: https://github.com/butler54/trustee-chart.git
+      targetRevision: merge-certs
+      path: ./
+      overrides:
+        - name: global.coco.secured
+          value: "true"
+        - name: global.coco.bypassAttestation
+          value: "true"
+        - name: kbs.https.enabled
+          value: "false"
+        - name: kbs.secretResources[0].name
+          value: kbsres1
+        - name: kbs.secretResources[0].key
+          value: secret/data/hub/kbsres1
+        - name: kbs.secretResources[1].name
+          value: passphrase
+        - name: kbs.secretResources[1].key
+          value: secret/data/hub/passphrase
+
+    storage:
+      name: storage
+      namespace: openshift-storage
+      project: hub
+      path: charts/hub/storage
+
+    baremetal:
+      name: baremetal
+      namespace: baremetal
+      project: hub
+      path: charts/all/baremetal
+
+    sandbox:
+      name: sandbox
+      namespace: openshift-sandboxed-containers-operator
+      project: sandbox
+      repoURL: https://github.com/butler54/sandboxed-containers-chart.git
+      targetRevision: remove-ssh
+      path: ./
+      overrides:
+        - name: global.secretStore.backend
+          value: vault
+        - name: secretStore.name
+          value: vault-backend
+        - name: secretStore.kind
+          value: ClusterSecretStore
+        - name: enablePeerPods
+          value: "false"
+
+
+    sandbox-policies:
+      name: sandbox-policies
+      namespace: openshift-sandboxed-containers-operator
+      repoURL: https://github.com/butler54/sandboxed-policies-chart.git
+      targetRevision: rootvolume
+      path: ./
+
+    kbs-access:
+      name: kbs-access
+      namespace: kbs-access
+      project: workloads
+      path: charts/coco-supported/kbs-access
+      overrides:
+        - name: runtimeClassName
+          value: "kata-cc"
+
+    hello-openshift:
+      name: hello-openshift
+      namespace: hello-openshift
+      project: workloads
+      path: charts/coco-supported/hello-openshift
+      overrides:
+        - name: runtimeClassName
+          value: "kata-cc"
+
+  imperative:
+    # NOTE: We *must* use lists and not hashes. As hashes lose ordering once parsed by helm
+    # The default schedule is every 10 minutes: imperative.schedule
+    # Total timeout of all jobs is 1h: imperative.activeDeadlineSeconds
+    # imagePullPolicy is set to always: imperative.imagePullPolicy
+    # For additional overrides that apply to the jobs, please refer to
+    # https://validatedpatterns.io/imperative-actions/#additional-job-customizations
+    image: ghcr.io/butler54/imperative-container:latest
+    serviceAccountCreate: true
+    adminServiceAccountCreate: true
+    serviceAccountName: imperative-admin-sa
+    jobs:
+    - name: install-deps
+      playbook: ansible/install-deps.yaml
+      verbosity: -vvv
+      timeout: 3600
+    - name: init-data-gzipper
+      playbook: ansible/init-data-gzipper.yaml
+      verbosity: -vvv
+      timeout: 3600
+    # Required for tech preview only.
+    # - name: detect-runtime-class
+    #   playbook: ansible/detect-runtime-class.yaml
+    #   verbosity: -vvv
+    #   timeout: 600

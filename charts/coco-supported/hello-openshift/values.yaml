@@ -1,6 +1,11 @@
 # Chart-specific values
 # Common values are inherited from values-global.yaml
 
+# Runtime class for confidential containers.
+# When empty, auto-detected from global.clusterPlatform (kata-remote for Azure/AWS, kata-cc otherwise).
+# Bare metal: set to "kata-cc" via values-baremetal.yaml overrides.
+runtimeClassName: ""
+
 # Global values used by this chart (overridden by values-global.yaml)
 global:
   clusterPlatform: ""  # Cluster platform: "Azure" or "AWS" - determines runtime class

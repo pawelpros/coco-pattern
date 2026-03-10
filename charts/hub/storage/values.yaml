@@ -1,0 +1,14 @@
+global:
+  storageProvider: hpp
+
+lvmCluster:
+  name: "lvmcluster"
+  deviceClass: "vg1"
+
+hpp:
+  storagePools:
+    path: /var/hpvolumes
+  storageClass:
+    name: hostpath-csi
+    reclaimPolicy: Delete
+    volumeBindingMode: WaitForFirstConsumer

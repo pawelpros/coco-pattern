@@ -1,0 +1,2 @@
+# External storage: uses cluster default StorageClass.
+# No vault storageClass override — vault uses whatever default exists.

@@ -2,21 +2,23 @@
 
 Validated pattern for deploying confidential containers on OpenShift using the [Validated Patterns](https://validatedpatterns.io/) framework.
 
-Confidential containers use hardware-backed Trusted Execution Environments (TEEs) to isolate workloads from cluster and hypervisor administrators. This pattern deploys and configures the Red Hat CoCo stack — including the sandboxed containers operator, Trustee (Key Broker Service), and peer-pod infrastructure — on Azure.
+Confidential containers use hardware-backed Trusted Execution Environments (TEEs) to isolate workloads from cluster and hypervisor administrators. This pattern deploys and configures the Red Hat CoCo stack — including the sandboxed containers operator, Trustee (Key Broker Service), and peer-pod infrastructure — on Azure and bare metal.
 
 ## Topologies
 
-The pattern provides two deployment topologies:
+The pattern provides three deployment topologies:
 
-1. **Single cluster** (`simple` clusterGroup) — deploys all components (Trustee, Vault, ACM, sandboxed containers, workloads) in one cluster. This breaks the RACI separation expected in a remote attestation architecture but simplifies testing and demonstrations.
+1. **Single cluster** (`simple` clusterGroup) — deploys all components (Trustee, Vault, ACM, sandboxed containers, workloads) in one cluster on Azure. This breaks the RACI separation expected in a remote attestation architecture but simplifies testing and demonstrations.
 
 2. **Multi-cluster** (`trusted-hub` + `spoke` clusterGroups) — separates the trusted zone from the untrusted workload zone:
    - **Hub** (`trusted-hub`): Runs Trustee (KBS + attestation service), HashiCorp Vault, ACM, and cert-manager. This cluster is the trust anchor.
    - **Spoke** (`spoke`): Runs the sandboxed containers operator and confidential workloads. The spoke is imported into ACM and managed from the hub.
 
+3. **Bare metal** (`baremetal` clusterGroup) — deploys all components on bare metal hardware with Intel TDX or AMD SEV-SNP support. NFD (Node Feature Discovery) auto-detects the CPU architecture and configures the appropriate runtime. Supports SNO (Single Node OpenShift) and multi-node clusters.
+
 The topology is controlled by the `main.clusterGroupName` field in `values-global.yaml`.
 
-Currently supports Azure via peer-pods. Peer-pods provision confidential VMs (`Standard_DCas_v5` family) directly on the Azure hypervisor rather than nesting VMs inside worker nodes.
+Azure deployments use peer-pods, which provision confidential VMs (`Standard_DCas_v5` family) directly on the Azure hypervisor. Bare metal deployments use layered images and hardware TEE features directly.
 
 ## Current version (4.*)
 
@@ -42,9 +44,21 @@ All previous versions used pre-GA (Technology Preview) releases of Trustee:
 
 ### Prerequisites
 
+**Azure deployments:**
+
 - OpenShift 4.17+ cluster on Azure (self-managed via `openshift-install` or ARO)
 - Azure `Standard_DCas_v5` VM quota in your target region (these are confidential computing VMs and are not available in all regions). See the note below for more details.
 - Azure DNS hosting the cluster's DNS zone
+
+**Bare metal deployments:**
+
+- OpenShift 4.17+ cluster on bare metal with Intel TDX or AMD SEV-SNP hardware
+- BIOS/firmware configured to enable TDX or SEV-SNP
+- Available block devices for LVMS storage (auto-discovered)
+- For Intel TDX: an Intel PCS API key from [api.portal.trustedservices.intel.com](https://api.portal.trustedservices.intel.com/)
+
+**Common:**
+
 - Tools on your workstation: `podman`, `yq`, `jq`, `skopeo`
 - OpenShift pull secret saved at `~/pull-secret.json` (download from [console.redhat.com](https://console.redhat.com/openshift/downloads))
 - Fork the repository — ArgoCD reconciles cluster state against your fork, so changes must be pushed to your remote
@@ -53,20 +67,20 @@ All previous versions used pre-GA (Technology Preview) releases of Trustee:
 
 These scripts generate the cryptographic material and attestation measurements needed by Trustee and the peer-pod VMs. Run them once before your first deployment.
 
-1. `bash scripts/gen-secrets.sh` — generates KBS key pairs, attestation policy seeds, and copies `values-secret.yaml.template` to `~/values-secret-coco-pattern.yaml`
-2. `bash scripts/get-pcr.sh` — retrieves PCR measurements from the peer-pod VM image and stores them at `~/.coco-pattern/measurements.json` (requires `podman`, `skopeo`, and `~/pull-secret.json`)
-3. Review and customise `~/values-secret-coco-pattern.yaml` — this file is loaded into Vault and provides secrets to the pattern
+1. `bash scripts/gen-secrets.sh` — generates KBS key pairs, PCCS certificates/tokens (for bare metal), and copies `values-secret.yaml.template` to `~/values-secret-coco-pattern.yaml`
+2. `bash scripts/get-pcr.sh` — retrieves PCR measurements from the peer-pod VM image and stores them at `~/.coco-pattern/measurements.json` (requires `podman`, `skopeo`, and `~/pull-secret.json`). **Not required for bare metal deployments.**
+3. Review and customise `~/values-secret-coco-pattern.yaml` — this file is loaded into Vault and provides secrets to the pattern. For bare metal, uncomment the PCCS secrets section and provide your Intel PCS API key.
 
 > **Note:** `gen-secrets.sh` will not overwrite existing secrets. Delete `~/.coco-pattern/` if you need to regenerate.
 
-### Single cluster deployment
+### Single cluster deployment (Azure)
 
 1. Set `main.clusterGroupName: simple` in `values-global.yaml`
 2. Ensure your Azure configuration is populated in `values-global.yaml` (see `global.azure.*` fields)
 3. `./pattern.sh make install`
 4. Wait for the cluster to reboot all nodes (the sandboxed containers operator triggers a MachineConfig update). Monitor progress in the ArgoCD UI.
 
-### Multi-cluster deployment
+### Multi-cluster deployment (Azure)
 
 1. Set `main.clusterGroupName: trusted-hub` in `values-global.yaml`
 2. Deploy the hub cluster: `./pattern.sh make install`
@@ -75,6 +89,25 @@ These scripts generate the cryptographic material and attestation measurements n
 5. Import the spoke into ACM with label `clusterGroup=spoke`
    (see [importing a cluster](https://validatedpatterns.io/learn/importing-a-cluster/))
 6. ACM will automatically deploy the `spoke` clusterGroup applications (sandboxed containers, workloads) to the imported cluster
+
+### Bare metal deployment
+
+1. Set `main.clusterGroupName: baremetal` in `values-global.yaml`
+2. Run `bash scripts/gen-secrets.sh` to generate KBS keys and PCCS secrets
+3. For Intel TDX: uncomment the PCCS secrets in `~/values-secret-coco-pattern.yaml` and provide your Intel PCS API key
+4. `./pattern.sh make install`
+5. Wait for the cluster to reboot nodes (MachineConfig updates for TDX kernel parameters and vsock)
+
+The system auto-detects your hardware:
+
+- **NFD** discovers Intel TDX or AMD SEV-SNP capabilities and labels nodes
+- **LVMS** auto-discovers available block devices for storage
+- **RuntimeClass** `kata-cc` is created automatically pointing to the correct handler (`kata-tdx` or `kata-snp`)
+- Both `kata-tdx` and `kata-snp` RuntimeClasses are deployed; only the one matching your hardware has schedulable nodes
+- MachineConfigs are deployed for both `master` and `worker` roles (safe on SNO where only master exists)
+- PCCS and QGS services deploy unconditionally; DaemonSets only schedule on Intel nodes via NFD labels
+
+Optional: pin PCCS to a specific node with `bash scripts/get-pccs-node.sh` and set `baremetal.pccs.nodeSelector` in the baremetal chart values.
 
 ## Sample applications
 

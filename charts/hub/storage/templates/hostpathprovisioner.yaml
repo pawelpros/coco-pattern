@@ -1,0 +1,11 @@
+{{- if eq .Values.global.storageProvider "hpp" }}
+apiVersion: hostpathprovisioner.kubevirt.io/v1beta1
+kind: HostPathProvisioner
+metadata:
+  name: hostpath-provisioner
+spec:
+  imagePullPolicy: IfNotPresent
+  storagePools:
+  - name: local
+    path: {{ .Values.hpp.storagePools.path | default "/var/hpvolumes" }}
+{{- end }}

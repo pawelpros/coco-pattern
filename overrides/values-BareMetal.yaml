@@ -1,0 +1,2 @@
+# Bare metal platform overrides.
+# Storage-specific values moved to overrides/values-storage-*.yaml.

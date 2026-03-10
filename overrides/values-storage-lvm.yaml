@@ -1,0 +1,8 @@
+vault:
+  server:
+    dataStorage:
+      storageClass: lvms-vg1
+
+global:
+  objectStorage:
+    backingStorageClass: "lvms-vg1"

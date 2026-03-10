@@ -1,0 +1,9 @@
+apiVersion: v2
+description: Bare metal platform configuration (NFD rules, MachineConfigs, RuntimeClasses, Intel device plugin).
+keywords:
+- pattern
+- upstream
+- sandbox
+- baremetal
+name: baremetal
+version: 0.0.1

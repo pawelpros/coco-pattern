@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: tdx-qgs
+  namespace: intel-dcap
+spec:
+  selector:
+    matchLabels:
+      app: tdx-qgs
+  template:
+    metadata:
+      labels:
+        app: tdx-qgs
+      annotations:
+        sgx.intel.com/quote-provider: tdx-qgs
+        qcnl-conf: '{"pccs_url": "https://pccs-service:8042/sgx/certification/v4/", "use_secure_cert": false, "pck_cache_expire_hours": 168}'
+    spec:
+      serviceAccountName: tdx-qgs-service-account
+      nodeSelector:
+        intel.feature.node.kubernetes.io/tdx: 'true'
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      initContainers:
+        - name: platform-registration
+          image: registry.redhat.io/openshift-sandboxed-containers/osc-tdx-qgs@sha256:86b23461c4eea073f4535a777374a54e934c37ac8c96c6180030f92ebf970524
+          restartPolicy: Always
+          command: [ '/usr/bin/dcap-registration-flow' ]
+          env:
+            - name: PCCS_URL
+              value: "https://pccs-service:8042"
+            - name: SECURE_CERT
+              value: 'false'
+          envFrom:
+            - secretRef:
+                name: pccs-secrets
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: true
+            privileged: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - LINUX_IMMUTABLE
+          volumeMounts:
+            - name: efivars
+              mountPath: /sys/firmware/efi/efivars
+      containers:
+        - name: tdx-qgs
+          image: registry.redhat.io/openshift-sandboxed-containers/osc-tdx-qgs@sha256:86b23461c4eea073f4535a777374a54e934c37ac8c96c6180030f92ebf970524
+          args:
+            - -p=4050
+            - -n=4
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            limits:
+              sgx.intel.com/epc: "512Ki"
+              sgx.intel.com/enclave: 1
+              sgx.intel.com/provision: 1
+          env:
+            - name: QCNL_CONF_PATH
+              value: "/run/dcap/qcnl_conf"
+            - name: XDG_CACHE_HOME
+              value: "/run/dcap/cache"
+          volumeMounts:
+            - name: dcap-qcnl-cache
+              mountPath: /run/dcap/cache
+            - name: qcnl-config
+              mountPath: /run/dcap/
+              readOnly: true
+      volumes:
+        - name: dcap-qcnl-cache
+          emptyDir:
+            sizeLimit: 50Mi
+        - name: qcnl-config
+          downwardAPI:
+            items:
+              - path: "qcnl_conf"
+                fieldRef:
+                  fieldPath: metadata.annotations['qcnl-conf']
+        - name: efivars
+          hostPath:
+            path: /sys/firmware/efi/efivars/

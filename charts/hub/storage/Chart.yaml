@@ -1,0 +1,9 @@
+apiVersion: v2
+description: Deploy and configure storage providers (HPP/LVM) for baremetal clusters
+keywords:
+- pattern
+- storage
+- hpp
+- lvm
+name: storage
+version: 0.0.2
