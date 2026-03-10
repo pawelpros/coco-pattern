@@ -99,9 +99,8 @@ clusterGroup:
       name: trustee
       namespace: trustee-operator-system
       project: trustee
-      repoURL: https://github.com/butler54/trustee-chart.git
-      targetRevision: merge-certs
-      path: ./
+      chart: trustee
+      chartVersion: 0.2.*
       overrides:
         - name: global.coco.secured
           value: "true"
@@ -134,9 +133,8 @@ clusterGroup:
       name: sandbox
       namespace: openshift-sandboxed-containers-operator
       project: sandbox
-      repoURL: https://github.com/butler54/sandboxed-containers-chart.git
-      targetRevision: remove-ssh
-      path: ./
+      chart: sandboxed-containers
+      chartVersion: 0.2.*
       overrides:
         - name: global.secretStore.backend
           value: vault
@@ -151,9 +149,8 @@ clusterGroup:
     sandbox-policies:
       name: sandbox-policies
       namespace: openshift-sandboxed-containers-operator
-      repoURL: https://github.com/butler54/sandboxed-policies-chart.git
-      targetRevision: rootvolume
-      path: ./
+      chart: sandboxed-policies
+      chartVersion: 0.1.*
 
     kbs-access:
       name: kbs-access
