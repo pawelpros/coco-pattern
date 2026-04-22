@@ -183,6 +183,9 @@ clusterGroup:
       syncPolicy:
         automated:
           prune: true
+      overrides:
+        - name: defaultMemory
+          value: "8192"
 
     hello-openshift:
       name: hello-openshift
