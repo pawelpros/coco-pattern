@@ -24,6 +24,7 @@ spec:
                 - Pod
               operations:
                 - CREATE
+                - UPDATE
       preconditions:
         all:
           - key: "{{ "{{" }}request.object.spec.runtimeClassName || '' {{ "}}" }}"
