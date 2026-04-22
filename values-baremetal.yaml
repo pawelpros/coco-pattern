@@ -119,6 +119,10 @@ clusterGroup:
           value: kbsres1
         - name: kbs.secretResources[0].key
           value: secret/data/hub/kbsres1
+        - name: kbs.tdx.enabled
+          value: "true"
+        - name: kbs.tdx.collateralService
+          value: "https://pccs-service.intel-dcap.svc.cluster.local:8042/sgx/certification/v4/"
         - name: kbs.secretResources[1].name
           value: passphrase
         - name: kbs.secretResources[1].key
