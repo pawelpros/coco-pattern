@@ -1,0 +1,47 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: inject-coco-initdata
+  annotations:
+    policies.kyverno.io/title: Inject CoCo InitData
+    policies.kyverno.io/category: Confidential Computing
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod,Deployment
+    policies.kyverno.io/description: >-
+      Injects cc_init_data annotation into pods with a kata runtime class
+      by reading from a ConfigMap specified via the coco.io/initdata-configmap
+      annotation. Kyverno autogen extends this to Deployments, StatefulSets,
+      DaemonSets, and Jobs automatically.
+    argocd.argoproj.io/sync-wave: "1"
+    pod-policies.kyverno.io/autogen-controllers: Deployment,StatefulSet,DaemonSet,Job
+spec:
+  rules:
+    - name: inject-initdata
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+      preconditions:
+        all:
+          - key: "{{ "{{" }}request.object.spec.runtimeClassName || '' {{ "}}" }}"
+            operator: AnyIn
+            value: ["kata", "kata-cc", "kata-remote"]
+          - key: "{{ "{{" }}request.object.metadata.annotations.\"coco.io/initdata-configmap\" || '' {{ "}}" }}"
+            operator: NotEquals
+            value: ""
+          - key: "{{ "{{" }}request.object.metadata.annotations.\"io.katacontainers.config.hypervisor.cc_init_data\" || '' {{ "}}" }}"
+            operator: Equals
+            value: ""
+      context:
+        - name: initdata
+          configMap:
+            name: "{{ "{{" }}request.object.metadata.annotations.\"coco.io/initdata-configmap\"{{ "}}" }}"
+            namespace: "{{ "{{" }}request.namespace{{ "}}" }}"
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            annotations:
+              io.katacontainers.config.hypervisor.cc_init_data: "{{ "{{" }}initdata.data.INITDATA{{ "}}" }}"

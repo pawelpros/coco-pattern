@@ -24,8 +24,8 @@ Azure deployments use peer-pods, which provision confidential VMs (`Standard_DCa
 
 Breaking change from v3. This is the first version using GA (Generally Available) releases of the CoCo stack:
 
-- **OpenShift Sandboxed Containers 1.11+** (requires OCP 4.17+)
-- **Red Hat Build of Trustee 1.0** (first GA release; all prior versions were Technology Preview)
+- **OpenShift Sandboxed Containers 1.12+** (requires OCP 4.17+)
+- **Red Hat Build of Trustee 1.1** (GA release; all versions prior to 1.0 were Technology Preview)
 - External chart repositories for [Trustee](https://github.com/validatedpatterns/trustee-chart), [sandboxed-containers](https://github.com/validatedpatterns/sandboxed-containers-chart), and [sandboxed-policies](https://github.com/validatedpatterns/sandboxed-policies-chart)
 - Self-signed certificates via cert-manager (Let's Encrypt no longer required)
 - Multi-cluster support via ACM

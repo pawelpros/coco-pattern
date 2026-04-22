@@ -16,6 +16,7 @@ clusterGroup:
   - cert-manager
   - kbs-access
   - encrypted-storage
+  - kyverno
   subscriptions:
     # ACM is kept anticipating 
     acm:
@@ -78,7 +79,10 @@ clusterGroup:
       namespace: trustee-operator-system #upstream config
       project: trustee
       chart: trustee
-      chartVersion: 0.2.*     
+      chartVersion: 0.3.*
+      overrides:
+        - name: kbs.admin.format
+          value: "v1.1"
     sandbox:
       name: sandbox
       namespace: openshift-sandboxed-containers-operator #upstream config
@@ -100,12 +104,61 @@ clusterGroup:
       namespace: hello-openshift
       project: workloads
       path: charts/coco-supported/hello-openshift
+      syncPolicy:
+        automated:
+          prune: true
 
     kbs-access:
       name: kbs-access
       namespace: kbs-access
       project: workloads
       path: charts/coco-supported/kbs-access
+      syncPolicy:
+        automated:
+          prune: true
+
+    kyverno:
+      name: kyverno
+      namespace: kyverno
+      project: hub
+      repoURL: https://kyverno.github.io/kyverno/
+      chart: kyverno
+      chartVersion: 3.7.*
+      syncPolicy:
+        automated: {}
+        retry:
+          limit: 20
+        syncOptions:
+          - ServerSideApply=true
+      overrides:
+        - name: admissionController.container.securityContext
+          value: "null"
+        - name: admissionController.initContainer.securityContext
+          value: "null"
+        - name: backgroundController.securityContext
+          value: "null"
+        - name: cleanupController.securityContext
+          value: "null"
+        - name: reportsController.securityContext
+          value: "null"
+        - name: crds.migration.securityContext
+          value: "null"
+        - name: webhooksCleanup.securityContext
+          value: "null"
+        - name: test.securityContext
+          value: "null"
+        - name: crds.groups.wgpolicyk8s.policyreports
+          value: "false"
+        - name: crds.groups.wgpolicyk8s.clusterpolicyreports
+          value: "false"
+        - name: reportsController.enabled
+          value: "false"
+
+    coco-kyverno-policies:
+      name: coco-kyverno-policies
+      namespace: openshift-sandboxed-containers-operator
+      project: sandbox
+      path: charts/all/coco-kyverno-policies
 
   imperative:
     # NOTE: We *must* use lists and not hashes. As hashes lose ordering once parsed by helm
