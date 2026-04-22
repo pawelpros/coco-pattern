@@ -20,6 +20,7 @@ clusterGroup:
   - openshift-nfd
   - baremetal
   - intel-dcap
+  - kyverno
 
   subscriptions:
     acm:
@@ -101,12 +102,12 @@ clusterGroup:
       namespace: trustee-operator-system
       project: trustee
       chart: trustee
-      chartVersion: 0.2.*
+      chartVersion: 0.3.*
       overrides:
         - name: global.coco.secured
           value: "true"
-        - name: global.coco.bypassAttestation
-          value: "true"
+        - name: kbs.admin.format
+          value: "v1.1"
         - name: kbs.https.enabled
           value: "false"
         - name: kbs.secretResources[0].name
@@ -169,18 +170,61 @@ clusterGroup:
       namespace: kbs-access
       project: workloads
       path: charts/coco-supported/kbs-access
-      overrides:
-        - name: runtimeClassName
-          value: "kata-cc"
+      syncPolicy:
+        automated:
+          prune: true
 
     hello-openshift:
       name: hello-openshift
       namespace: hello-openshift
       project: workloads
       path: charts/coco-supported/hello-openshift
+      syncPolicy:
+        automated:
+          prune: true
+
+    kyverno:
+      name: kyverno
+      namespace: kyverno
+      project: hub
+      repoURL: https://kyverno.github.io/kyverno/
+      chart: kyverno
+      chartVersion: 3.7.*
+      syncPolicy:
+        automated: {}
+        retry:
+          limit: 20
+        syncOptions:
+          - ServerSideApply=true
       overrides:
-        - name: runtimeClassName
-          value: "kata-cc"
+        - name: admissionController.container.securityContext
+          value: "null"
+        - name: admissionController.initContainer.securityContext
+          value: "null"
+        - name: backgroundController.securityContext
+          value: "null"
+        - name: cleanupController.securityContext
+          value: "null"
+        - name: reportsController.securityContext
+          value: "null"
+        - name: crds.migration.securityContext
+          value: "null"
+        - name: webhooksCleanup.securityContext
+          value: "null"
+        - name: test.securityContext
+          value: "null"
+        - name: crds.groups.wgpolicyk8s.policyreports
+          value: "false"
+        - name: crds.groups.wgpolicyk8s.clusterpolicyreports
+          value: "false"
+        - name: reportsController.enabled
+          value: "false"
+
+    coco-kyverno-policies:
+      name: coco-kyverno-policies
+      namespace: openshift-sandboxed-containers-operator
+      project: sandbox
+      path: charts/all/coco-kyverno-policies
 
   imperative:
     # NOTE: We *must* use lists and not hashes. As hashes lose ordering once parsed by helm
