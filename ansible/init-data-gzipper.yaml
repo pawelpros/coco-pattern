@@ -114,21 +114,33 @@
       register: debug_initdata_encoded
       changed_when: false
 
+    - name: Compute raw SHA-256 hash of default initdata
+      ansible.builtin.shell: |
+        set -o pipefail
+        sha256sum "{{ rendered_path }}" | cut -d' ' -f1
+      register: raw_hash
+      changed_when: false
+
+    - name: Compute raw SHA-256 hash of debug initdata
+      ansible.builtin.shell: |
+        set -o pipefail
+        sha256sum "{{ debug_rendered_path }}" | cut -d' ' -f1
+      register: debug_raw_hash
+      changed_when: false
+
     - name: Register init data pcr into a var
       ansible.builtin.shell: |
         set -o pipefail
-        hash=$(sha256sum "{{ rendered_path }}" | cut -d' ' -f1)
         initial_pcr=0000000000000000000000000000000000000000000000000000000000000000
-        PCR8_HASH=$(echo -n "$initial_pcr$hash" | xxd -r -p | sha256sum | cut -d' ' -f1) && echo $PCR8_HASH
+        PCR8_HASH=$(echo -n "$initial_pcr{{ raw_hash.stdout }}" | xxd -r -p | sha256sum | cut -d' ' -f1) && echo $PCR8_HASH
       register: pcr8_hash
       changed_when: false
 
     - name: Register debug init data pcr into a var
       ansible.builtin.shell: |
         set -o pipefail
-        hash=$(sha256sum "{{ debug_rendered_path }}" | cut -d' ' -f1)
         initial_pcr=0000000000000000000000000000000000000000000000000000000000000000
-        PCR8_HASH=$(echo -n "$initial_pcr$hash" | xxd -r -p | sha256sum | cut -d' ' -f1) && echo $PCR8_HASH
+        PCR8_HASH=$(echo -n "$initial_pcr{{ debug_raw_hash.stdout }}" | xxd -r -p | sha256sum | cut -d' ' -f1) && echo $PCR8_HASH
       register: debug_pcr8_hash
       changed_when: false
 
@@ -147,6 +159,7 @@
           data:
             INITDATA: "{{ initdata_encoded.stdout }}"
             PCR8_HASH: "{{ pcr8_hash.stdout }}"
+            RAW_HASH: "{{ raw_hash.stdout }}"
             version: "0.1.0"
             algorithm: "sha256"
             aa.toml: "{{ raw_aa_toml.stdout }}"
@@ -168,6 +181,7 @@
           data:
             INITDATA: "{{ debug_initdata_encoded.stdout }}"
             PCR8_HASH: "{{ debug_pcr8_hash.stdout }}"
+            RAW_HASH: "{{ debug_raw_hash.stdout }}"
             version: "0.1.0"
             algorithm: "sha256"
             aa.toml: "{{ raw_aa_toml.stdout }}"
