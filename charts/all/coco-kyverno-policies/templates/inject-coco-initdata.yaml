@@ -6,14 +6,14 @@ metadata:
     policies.kyverno.io/title: Inject CoCo InitData
     policies.kyverno.io/category: Confidential Computing
     policies.kyverno.io/severity: medium
-    policies.kyverno.io/subject: Pod,Deployment
+    policies.kyverno.io/subject: Pod
     policies.kyverno.io/description: >-
       Injects cc_init_data annotation into pods with a kata runtime class
       by reading from a ConfigMap specified via the coco.io/initdata-configmap
-      annotation. Kyverno autogen extends this to Deployments, StatefulSets,
-      DaemonSets, and Jobs automatically.
+      annotation. Targets Pods only (not Deployments) so that Deployments
+      remain stable and a rollout restart resolves the latest initdata.
     argocd.argoproj.io/sync-wave: "1"
-    pod-policies.kyverno.io/autogen-controllers: Deployment,StatefulSet,DaemonSet,Job
+    pod-policies.kyverno.io/autogen-controllers: none
 spec:
   rules:
     - name: inject-initdata
@@ -24,7 +24,6 @@ spec:
                 - Pod
               operations:
                 - CREATE
-                - UPDATE
       preconditions:
         all:
           - key: "{{ "{{" }}request.object.spec.runtimeClassName || '' {{ "}}" }}"
