@@ -1,0 +1,15 @@
+{{- if .Values.iommu.enabled }}
+{{- range list "master" "worker" }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: {{ . }}
+  name: 100-iommu-{{ . }}
+spec:
+  kernelArguments:
+  - intel_iommu=on
+  - iommu=pt
+{{- end }}
+{{- end }}

@@ -1,0 +1,15 @@
+enabled: true
+
+ccManager:
+  enabled: true
+  defaultMode: "on"
+  deviceIDs: "0x2331,0x2322"
+
+kataSandboxDevicePlugin:
+  enabled: true
+  repository: nvcr.io/nvidia/cloud-native
+  image: nvidia-sandbox-device-plugin
+  version: "v0.0.2"
+
+iommu:
+  enabled: true

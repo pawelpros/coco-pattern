@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-vectoradd
+  labels:
+    app: gpu-vectoradd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpu-vectoradd
+  template:
+    metadata:
+      labels:
+        app: gpu-vectoradd
+      annotations:
+        coco.io/initdata-configmap: initdata
+        {{- if .Values.defaultMemory }}
+        io.katacontainers.config.hypervisor.default_memory: {{ .Values.defaultMemory | quote }}
+        {{- end }}
+    spec:
+      runtimeClassName: {{ .Values.runtimeClassName }}
+      containers:
+        - name: cuda-vectoradd
+          image: nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda11.7.1-ubuntu20.04
+          resources:
+            limits:
+              nvidia.com/pgpu: 1
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
