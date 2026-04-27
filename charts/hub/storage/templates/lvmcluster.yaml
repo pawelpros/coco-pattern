@@ -1,4 +1,4 @@
-{{- if eq .Values.global.storageProvider "lvm" }}
+{{- if eq .Values.global.baremetalStorageProvider "lvm" }}
 apiVersion: lvm.topolvm.io/v1alpha1
 kind: LVMCluster
 metadata:

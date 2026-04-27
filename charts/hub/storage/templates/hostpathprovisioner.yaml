@@ -1,4 +1,4 @@
-{{- if eq .Values.global.storageProvider "hpp" }}
+{{- if eq .Values.global.baremetalStorageProvider "hpp" }}
 apiVersion: hostpathprovisioner.kubevirt.io/v1beta1
 kind: HostPathProvisioner
 metadata:

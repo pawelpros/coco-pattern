@@ -3,7 +3,7 @@
   hosts: localhost
   connection: local
   become: false
-  gather_facts: false
+  gather_facts: true
   tasks:
     - name: Check for nodes with NVIDIA GPU labels
       kubernetes.core.k8s_info:

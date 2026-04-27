@@ -1,5 +1,5 @@
 global:
-  storageProvider: hpp
+  baremetalStorageProvider: hpp
 
 lvmCluster:
   name: "lvmcluster"
