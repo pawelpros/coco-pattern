@@ -6,138 +6,108 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "110"
 spec:
-  operator:
-    defaultRuntime: crio
-    runtimeClass: nvidia
-    use_ocp_driver_toolkit: true
-
+  ccManager:
+    defaultMode: {{ .Values.ccManager.defaultMode | quote }}
+    enabled: {{ .Values.ccManager.enabled }}
+  cdi:
+    default: false
+    enabled: true
+    nriPluginEnabled: false
   daemonsets:
     rollingUpdate:
-      maxUnavailable: "1"
+      maxUnavailable: '1'
     updateStrategy: RollingUpdate
-
+  dcgm:
+    enabled: false
+  dcgmExporter:
+    config:
+      name: ''
+    enabled: false
+    serviceMonitor:
+      enabled: true
+  devicePlugin:
+    config:
+      default: ''
+      name: ''
+    enabled: false
+    mps:
+      root: /run/nvidia/mps
   driver:
-    enabled: true
-    useNvidiaDriverCRD: false
+    certConfig:
+      name: ''
+    enabled: false
+    kernelModuleConfig:
+      name: ''
     kernelModuleType: auto
     licensingConfig:
+      configMapName: ''
       nlsEnabled: true
-      secretName: ""
-    certConfig:
-      name: ""
-    kernelModuleConfig:
-      name: ""
     repoConfig:
-      configMapName: ""
-    virtualTopology:
-      config: ""
+      configMapName: ''
     upgradePolicy:
       autoUpgrade: true
-      maxParallelUpgrades: 1
-      maxUnavailable: 25%
       drain:
         deleteEmptyDir: false
         enable: false
         force: false
         timeoutSeconds: 300
+      maxParallelUpgrades: 1
+      maxUnavailable: 25%
       podDeletion:
         deleteEmptyDir: false
         force: false
         timeoutSeconds: 300
       waitForCompletion:
         timeoutSeconds: 0
-
-  devicePlugin:
-    enabled: false
-    config:
-      name: ""
-      default: ""
-    mps:
-      root: /run/nvidia/mps
-
-  dcgm:
-    enabled: true
-
-  dcgmExporter:
-    enabled: true
-    config:
-      name: ""
-    serviceMonitor:
-      enabled: true
-
-  gfd:
-    enabled: true
-
-  nodeStatusExporter:
-    enabled: true
-
-  toolkit:
-    enabled: true
-    installDir: /usr/local/nvidia
-
-  validator:
-    plugin:
-      env: []
-
-  sandboxWorkloads:
-    enabled: true
-    mode: kata
-    defaultWorkload: vm-passthrough
-
-  kataManager:
-    enabled: false
-    config:
-      artifactsDir: /opt/nvidia-gpu-operator/artifacts/runtimeclasses
-
-  ccManager:
-    enabled: {{ .Values.ccManager.enabled }}
-    defaultMode: {{ .Values.ccManager.defaultMode | quote }}
-    repository: nvcr.io/nvidia/cloud-native
-    image: k8s-cc-manager
-    version: v0.1.0
-    env:
-      - name: CC_CAPABLE_DEVICE_IDS
-        value: {{ .Values.ccManager.deviceIDs | quote }}
-
-  kataSandboxDevicePlugin:
-    enabled: {{ .Values.kataSandboxDevicePlugin.enabled }}
-    repository: {{ .Values.kataSandboxDevicePlugin.repository }}
-    image: {{ .Values.kataSandboxDevicePlugin.image }}
-    version: {{ .Values.kataSandboxDevicePlugin.version | quote }}
-
-  sandboxDevicePlugin:
-    enabled: true
-
-  vfioManager:
-    enabled: true
-
-  vgpuManager:
-    enabled: false
-
-  vgpuDeviceManager:
-    enabled: true
-    config:
-      default: default
-
+    useNvidiaDriverCRD: false
+    useOpenKernelModules: false
+    virtualTopology:
+      config: ''
   gdrcopy:
     enabled: false
-
   gds:
     enabled: false
-
+  gfd:
+    enabled: true
+  kataManager:
+    enabled: false
   mig:
     strategy: single
-
   migManager:
+    enabled: false
+  nodeStatusExporter:
     enabled: true
-    config:
-      default: all-disabled
-
-  cdi:
-    default: false
+  operator:
+    defaultRuntime: crio
+    initContainer: {}
+    runtimeClass: nvidia
+    use_ocp_driver_toolkit: true
+  kataSandboxDevicePlugin:
+    enabled: {{ .Values.kataSandboxDevicePlugin.enabled }}
+    env:
+      - name: P_GPU_ALIAS
+        value: pgpu
+      - name: NVSWITCH_ALIAS
+        value: nvswitch
+  sandboxWorkloads:
+    defaultWorkload: vm-passthrough
     enabled: true
-    nriPluginEnabled: false
-
-  nfd:
-    nodefeaturerules: true
+    mode: kata
+  toolkit:
+    enabled: false
+    installDir: /usr/local/nvidia
+  validator:
+    plugin:
+      env:
+        - name: WITH_WORKLOAD
+          value: 'false'
+  vfioManager:
+    enabled: true
+    env:
+      - name: BIND_NVSWITCHES
+        value: 'true'
+  vgpuDeviceManager:
+    enabled: false
+  vgpuManager:
+    enabled: false
 {{- end }}
