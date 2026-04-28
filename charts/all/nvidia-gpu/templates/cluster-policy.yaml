@@ -8,6 +8,76 @@ metadata:
 spec:
   operator:
     defaultRuntime: crio
+    runtimeClass: nvidia
+    use_ocp_driver_toolkit: true
+
+  daemonsets:
+    rollingUpdate:
+      maxUnavailable: "1"
+    updateStrategy: RollingUpdate
+
+  driver:
+    enabled: true
+    useNvidiaDriverCRD: false
+    kernelModuleType: auto
+    licensingConfig:
+      nlsEnabled: true
+      secretName: ""
+    certConfig:
+      name: ""
+    kernelModuleConfig:
+      name: ""
+    repoConfig:
+      configMapName: ""
+    virtualTopology:
+      config: ""
+    upgradePolicy:
+      autoUpgrade: true
+      maxParallelUpgrades: 1
+      maxUnavailable: 25%
+      drain:
+        deleteEmptyDir: false
+        enable: false
+        force: false
+        timeoutSeconds: 300
+      podDeletion:
+        deleteEmptyDir: false
+        force: false
+        timeoutSeconds: 300
+      waitForCompletion:
+        timeoutSeconds: 0
+
+  devicePlugin:
+    enabled: false
+    config:
+      name: ""
+      default: ""
+    mps:
+      root: /run/nvidia/mps
+
+  dcgm:
+    enabled: true
+
+  dcgmExporter:
+    enabled: true
+    config:
+      name: ""
+    serviceMonitor:
+      enabled: true
+
+  gfd:
+    enabled: true
+
+  nodeStatusExporter:
+    enabled: true
+
+  toolkit:
+    enabled: true
+    installDir: /usr/local/nvidia
+
+  validator:
+    plugin:
+      env: []
 
   sandboxWorkloads:
     enabled: true
@@ -16,6 +86,8 @@ spec:
 
   kataManager:
     enabled: false
+    config:
+      artifactsDir: /opt/nvidia-gpu-operator/artifacts/runtimeclasses
 
   ccManager:
     enabled: {{ .Values.ccManager.enabled }}
@@ -36,17 +108,35 @@ spec:
   sandboxDevicePlugin:
     enabled: true
 
-  driver:
-    enabled: true
-
-  devicePlugin:
-    enabled: false
-
   vfioManager:
     enabled: true
 
-  gfd:
+  vgpuManager:
+    enabled: false
+
+  vgpuDeviceManager:
     enabled: true
+    config:
+      default: default
+
+  gdrcopy:
+    enabled: false
+
+  gds:
+    enabled: false
+
+  mig:
+    strategy: single
+
+  migManager:
+    enabled: true
+    config:
+      default: all-disabled
+
+  cdi:
+    default: false
+    enabled: true
+    nriPluginEnabled: false
 
   nfd:
     nodefeaturerules: true
