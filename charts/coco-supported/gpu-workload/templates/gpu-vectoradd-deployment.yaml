@@ -21,17 +21,14 @@ spec:
     spec:
       runtimeClassName: {{ .Values.runtimeClassName }}
       containers:
-        - name: cuda-vectoradd
-          image: nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0
+        - name: gpu-cc-verifier
+          image: quay.io/openshift_sandboxed_containers/gpu-verifier:ubi9
+          command: ["/bin/bash"]
+          args:
+            - -c
+            - |
+              /opt/cuda-samples/Samples/0_Introduction/vectorAdd/build/vectorAdd
+              sleep 36000
           resources:
             limits:
               nvidia.com/pgpu: 1
-          securityContext:
-            privileged: false
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            capabilities:
-              drop:
-                - ALL
-            seccompProfile:
-              type: RuntimeDefault
