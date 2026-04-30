@@ -57,6 +57,29 @@ echo -n "admintoken" | sha512sum | tr -d '[:space:]-' > "${COCO_SECRETS_DIR}/pcc
 ## Copy a sample values file if this stuff doesn't exist
 
 if [ ! -f "${VALUES_FILE}" ]; then
-	echo "No values file was found copying template.. please review before deploying"
+	echo
+	echo "========================================================================"
+	echo "IMPORTANT: Created values-secret file at ${VALUES_FILE}"
+	echo "========================================================================"
+	echo
 	cp "${SCRIPT_DIR}/../values-secret.yaml.template" "${VALUES_FILE}"
+	echo "ACTION REQUIRED: Review and customize this file before deploying:"
+	echo
+	echo "  For Azure deployments:"
+	echo "    - SSH debug is optional (uncomment sshKey if needed)"
+	echo "    - PCCS secrets can remain commented out"
+	echo
+	echo "  For Bare Metal deployments:"
+	echo "    - Uncomment the PCCS secrets section"
+	echo "    - Add your Intel PCS API key (get from https://api.portal.trustedservices.intel.com/)"
+	echo "    - SSH debug is optional (uncomment sshKey if needed)"
+	echo "    - See docs/pcr-reference-values-bare-metal.md for PCR collection"
+	echo
+	echo "  Security policies:"
+	echo "    - Default is 'insecure' (accepts all images)"
+	echo "    - For production, configure 'signed' policy with cosign keys"
+	echo
+	echo "File location: ${VALUES_FILE}"
+	echo "========================================================================"
+	echo
 fi

@@ -259,8 +259,3 @@ clusterGroup:
       playbook: ansible/init-data-gzipper.yaml
       verbosity: -vvv
       timeout: 3600
-    # Required for tech preview only.
-    # - name: detect-runtime-class
-    #   playbook: ansible/detect-runtime-class.yaml
-    #   verbosity: -vvv
-    #   timeout: 600

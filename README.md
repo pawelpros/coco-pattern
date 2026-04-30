@@ -2,7 +2,7 @@
 
 Validated pattern for deploying confidential containers on OpenShift using the [Validated Patterns](https://validatedpatterns.io/) framework.
 
-Confidential containers use hardware-backed Trusted Execution Environments (TEEs) to isolate workloads from cluster and hypervisor administrators. This pattern deploys and configures the Red Hat CoCo stack — including the sandboxed containers operator, Trustee (Key Broker Service), and peer-pod infrastructure — on Azure and bare metal.
+Confidential containers use hardware-backed Trusted Execution Environments (TEEs) to isolate workloads from cluster and hypervisor administrators. This pattern deploys and configures the Red Hat CoCo stack — including the sandboxed containers operator, Trustee (Key Broker Service) operator, and Kata infrastructure — on Azure cloud instances and bare metal.
 
 ## Topologies
 
@@ -24,7 +24,7 @@ Azure deployments use peer-pods, which provision confidential VMs (`Standard_DCa
 
 Breaking change from v3. This is the first version using GA (Generally Available) releases of the CoCo stack:
 
-- **OpenShift Sandboxed Containers 1.12+** (requires OCP 4.17+)
+- **OpenShift Sandboxed Containers 1.12+** (requires OCP 4.19.28+)
 - **Red Hat Build of Trustee 1.1** (GA release; all versions prior to 1.0 were Technology Preview)
 - External chart repositories for [Trustee](https://github.com/validatedpatterns/trustee-chart), [sandboxed-containers](https://github.com/validatedpatterns/sandboxed-containers-chart), and [sandboxed-policies](https://github.com/validatedpatterns/sandboxed-policies-chart)
 - Self-signed certificates via cert-manager (Let's Encrypt no longer required)
@@ -46,13 +46,13 @@ All previous versions used pre-GA (Technology Preview) releases of Trustee:
 
 **Azure deployments:**
 
-- OpenShift 4.17+ cluster on Azure (self-managed via `openshift-install` or ARO)
+- OpenShift 4.19.28+ cluster on Azure (self-managed via `openshift-install` or ARO)
 - Azure `Standard_DCas_v5` VM quota in your target region (these are confidential computing VMs and are not available in all regions). See the note below for more details.
 - Azure DNS hosting the cluster's DNS zone
 
 **Bare metal deployments:**
 
-- OpenShift 4.17+ cluster on bare metal with Intel TDX or AMD SEV-SNP hardware
+- OpenShift 4.19.28+ cluster on bare metal with Intel TDX or AMD SEV-SNP hardware
 - BIOS/firmware configured to enable TDX or SEV-SNP
 - Available block devices for LVMS storage (auto-discovered)
 - For Intel TDX: an Intel PCS API key from [api.portal.trustedservices.intel.com](https://api.portal.trustedservices.intel.com/)
@@ -68,7 +68,7 @@ All previous versions used pre-GA (Technology Preview) releases of Trustee:
 These scripts generate the cryptographic material and attestation measurements needed by Trustee and the peer-pod VMs. Run them once before your first deployment.
 
 1. `bash scripts/gen-secrets.sh` — generates KBS key pairs, PCCS certificates/tokens (for bare metal), and copies `values-secret.yaml.template` to `~/values-secret-coco-pattern.yaml`
-2. `bash scripts/get-pcr.sh` — retrieves PCR measurements from the peer-pod VM image and stores them at `~/.coco-pattern/measurements.json` (requires `podman`, `skopeo`, and `~/pull-secret.json`). **Not required for bare metal deployments.**
+2. `bash scripts/get-pcr.sh` — retrieves PCR measurements from the peer-pod VM image and stores them at `~/.coco-pattern/measurements.json` (requires `podman`, `skopeo`, and `~/pull-secret.json`). **Azure only.** Bare metal uses manual PCR collection — see [docs/pcr-reference-values-bare-metal.md](docs/pcr-reference-values-bare-metal.md) for the procedure. Store the measurements at `~/.coco-pattern/measurements.json`.
 3. Review and customise `~/values-secret-coco-pattern.yaml` — this file is loaded into Vault and provides secrets to the pattern. For bare metal, uncomment the PCCS secrets section and provide your Intel PCS API key.
 
 > **Note:** `gen-secrets.sh` will not overwrite existing secrets. Delete `~/.coco-pattern/` if you need to regenerate.
@@ -85,7 +85,7 @@ These scripts generate the cryptographic material and attestation measurements n
 1. Set `main.clusterGroupName: trusted-hub` in `values-global.yaml`
 2. Deploy the hub cluster: `./pattern.sh make install`
 3. Wait for ACM (`MultiClusterHub`) to reach `Running` state on the hub
-4. Provision a second OpenShift 4.17+ cluster on Azure for the spoke
+4. Provision a second OpenShift 4.19.28+ cluster on Azure for the spoke
 5. Import the spoke into ACM with label `clusterGroup=spoke`
    (see [importing a cluster](https://validatedpatterns.io/learn/importing-a-cluster/))
 6. ACM will automatically deploy the `spoke` clusterGroup applications (sandboxed containers, workloads) to the imported cluster
@@ -118,7 +118,7 @@ Two sample applications are deployed on the cluster running confidential workloa
   - `secure` — a confidential container with a strict policy; `oc exec` is denied even for `kubeadmin`
   - `insecure-policy` — a confidential container with a relaxed policy allowing `oc exec` (useful for testing the Confidential Data Hub)
 
-  Each confidential pod runs on its own `Standard_DC2as_v5` Azure VM (visible in the Azure portal). Pods use `runtimeClassName: kata-remote`.
+  On Azure, each confidential pod runs on its own `Standard_DC2as_v5` Azure VM (visible in the Azure portal) using `runtimeClassName: kata-remote`. On bare metal, pods use `runtimeClassName: kata-cc` and run directly on the underlying TDX or SEV-SNP hardware.
 
 - **kbs-access**: A web service that retrieves and presents secrets obtained from the Trustee Key Broker Service (KBS) via the Confidential Data Hub (CDH). Useful for verifying end-to-end attestation and secret delivery in locked-down environments.
 
