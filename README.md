@@ -6,7 +6,7 @@ Confidential containers use hardware-backed Trusted Execution Environments (TEEs
 
 ## Topologies
 
-The pattern provides three deployment topologies:
+The pattern provides four deployment topologies:
 
 1. **Single cluster** (`simple` clusterGroup) — deploys all components (Trustee, Vault, ACM, sandboxed containers, workloads) in one cluster on Azure. This breaks the RACI separation expected in a remote attestation architecture but simplifies testing and demonstrations.
 
@@ -29,6 +29,10 @@ Breaking change from v4. Uses GA releases of the CoCo stack with Kyverno-based i
 - **5.0** — Kyverno-based `cc_init_data` injection (replaces MutatingAdmissionPolicy), OSC 1.12 / Trustee 1.1 GA, external chart repositories, self-signed certificates via cert-manager, multi-cluster support via ACM. Requires OCP 4.19.28+.
 - **5.1** — Bare metal support for Intel TDX and AMD SEV-SNP via NFD auto-detection. Currently tested on SNO (Single Node OpenShift) configurations only.
 - **5.2** — NVIDIA H100 confidential GPU support for bare metal (`baremetal-gpu` clusterGroup). Adds GPU Operator, IOMMU configuration, CC Manager, and sample CUDA workload.
+- **5.3** — DRY refactor of trustee and kyverno overrides, Kyverno CRD label fix, pattern infrastructure update.
+- **5.4** — Firmware reference values workflow for bare metal attestation via veritas. Adds `collect-firmware-refvals.sh`, RVPS integration, and hardened attestation policy (trustee-chart v0.5.0).
+- **5.5** — Trustee-chart v0.7.0 (td_attributes.debug path fix). Unified reference value collection for Azure and bare metal via veritas container.
+- **5.6** — Documentation update, sandboxed-policies v0.2.0 (Azure-conditional peer-pods).
 
 ### Previous versions
 
@@ -62,12 +66,15 @@ Breaking change from v4. Uses GA releases of the CoCo stack with Kyverno-based i
 - OpenShift pull secret saved at `~/pull-secret.json` (download from [console.redhat.com](https://console.redhat.com/openshift/downloads))
 - Fork the repository — ArgoCD reconciles cluster state against your fork, so changes must be pushed to your remote
 
-### Secrets and PCR setup
+### Secrets and reference value setup
 
-These scripts generate the cryptographic material and attestation measurements needed by Trustee and the peer-pod VMs. Run them once before your first deployment.
+These scripts generate the cryptographic material and attestation reference values needed by Trustee. Run them once before your first deployment.
 
 1. `bash scripts/gen-secrets.sh` — generates KBS key pairs, PCCS certificates/tokens (for bare metal), and copies `values-secret.yaml.template` to `~/values-secret-coco-pattern.yaml`
-2. `bash scripts/get-pcr.sh` — retrieves PCR measurements from the peer-pod VM image and stores them at `~/.coco-pattern/measurements.json` (requires `podman`, `skopeo`, and `~/pull-secret.json`). **Azure only.** Bare metal uses manual PCR collection — see [docs/pcr-reference-values-bare-metal.md](docs/pcr-reference-values-bare-metal.md) for the procedure. Store the measurements at `~/.coco-pattern/measurements.json`.
+2. Collect attestation reference values (requires `podman`, `yq`, `jq`, and `~/pull-secret.json`):
+   - **Azure:** `make collect-azure-refvals` — pulls PCR measurements from the dm-verity image via veritas. Saves to `~/.coco-pattern/measurements.json`.
+   - **Bare metal:** `make collect-firmware-refvals` — computes firmware measurements from OCP release artifacts via veritas. Saves to `~/.coco-pattern/firmware-reference-values.json`. For bare metal, also uncomment the `firmwareReferenceValues` section in `~/values-secret-coco-pattern.yaml`.
+   - See [docs/firmware-reference-values.md](docs/firmware-reference-values.md) for detailed workflow and options.
 3. Review and customise `~/values-secret-coco-pattern.yaml` — this file is loaded into Vault and provides secrets to the pattern. For bare metal, uncomment the PCCS secrets section and provide your Intel PCS API key.
 
 > **Note:** `gen-secrets.sh` will not overwrite existing secrets. Delete `~/.coco-pattern/` if you need to regenerate.
@@ -173,4 +180,4 @@ Deployment commands:
 - Single cluster: `bash rhdp/wrapper.sh <azure-region>` (e.g. `bash rhdp/wrapper.sh eastasia`)
 - Multi-cluster: `bash rhdp/wrapper-multicluster.sh <azure-region>`
 
-The wrapper scripts handle cluster provisioning via `openshift-install`, secret generation, PCR retrieval, and pattern installation.
+The wrapper scripts handle cluster provisioning via `openshift-install`, secret generation, reference value collection, and pattern installation.
