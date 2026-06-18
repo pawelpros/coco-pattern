@@ -35,7 +35,7 @@ clusterGroup:
       source: redhat-operators
       channel: stable
       installPlanApproval: Manual
-      csv: sandboxed-containers-operator.v1.12.0
+      csv: sandboxed-containers-operator.v1.12.1
     trustee:
       name: trustee-operator
       namespace: trustee-operator-system
@@ -69,7 +69,7 @@ clusterGroup:
       source: certified-operators
       channel: v26.3
       installPlanApproval: Manual
-      csv: gpu-operator-certified.v26.3.0
+      csv: gpu-operator-certified.v26.3.2
     intel-device-plugins:
       name: intel-device-plugins-operator
       namespace: openshift-operators
