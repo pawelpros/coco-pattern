@@ -75,6 +75,7 @@ clusterGroup:
       namespace: openshift-operators
       source: certified-operators
       channel: stable
+      csv: intel-device-plugins-operator.v0.35.0
   projects:
   - hub
   - vault
