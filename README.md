@@ -8,17 +8,21 @@ Confidential containers use hardware-backed Trusted Execution Environments (TEEs
 
 The pattern provides four deployment topologies:
 
-1. **Single cluster** (`simple` clusterGroup) — deploys all components (Trustee, Vault, ACM, sandboxed containers, workloads) in one cluster on Azure. This breaks the RACI separation expected in a remote attestation architecture but simplifies testing and demonstrations.
+1. **Single cluster** (`azure` clusterGroup) — deploys all components (Trustee, Vault, ACM, sandboxed containers, workloads) in one cluster on Azure. This breaks the RACI separation expected in a remote attestation architecture but simplifies testing and demonstrations.
 
-2. **Multi-cluster** (`trusted-hub` + `spoke` clusterGroups) — separates the trusted zone from the untrusted workload zone:
+2. **Multi-cluster** (`trusted-hub` + `azure-spoke` clusterGroups) — separates the trusted zone from the untrusted workload zone:
    - **Hub** (`trusted-hub`): Runs Trustee (KBS + attestation service), HashiCorp Vault, ACM, and cert-manager. This cluster is the trust anchor.
-   - **Spoke** (`spoke`): Runs the sandboxed containers operator and confidential workloads. The spoke is imported into ACM and managed from the hub.
+   - **Spoke** (`azure-spoke`): Runs the sandboxed containers operator and confidential workloads. The spoke is imported into ACM and managed from the hub.
 
 3. **Bare metal** (`baremetal` clusterGroup) — deploys all components on bare metal hardware with Intel TDX or AMD SEV-SNP support. NFD (Node Feature Discovery) auto-detects the CPU architecture and configures the appropriate runtime. Supports SNO (Single Node OpenShift) and multi-node clusters.
 
-4. **Bare metal with GPU** (`baremetal-gpu` clusterGroup) — extends the bare metal topology with NVIDIA H100 confidential GPU support. Adds the NVIDIA GPU Operator, IOMMU kernel configuration, and a sample CUDA workload for CC GPU verification. Requires NVIDIA H100 GPUs with confidential computing firmware.
+   Hardware-specific operators (GPU, Intel device plugins, DCAP) are controlled by `global.hardware.profile`:
+   - `intel-tdx` — Intel TDX without GPU
+   - `amd-snp` — AMD SEV-SNP without GPU
+   - `intel-tdx-gpu` — Intel TDX with NVIDIA H100 GPU
+   - `amd-snp-gpu` — AMD SEV-SNP with NVIDIA H100 GPU
 
-The topology is controlled by the `main.clusterGroupName` field in `values-global.yaml`.
+The topology is controlled by the `main.clusterGroupName` field in `values-global.yaml`. For bare metal deployments, also set `global.hardware.profile` to match your hardware configuration.
 
 Azure deployments use peer-pods, which provision confidential VMs (`Standard_DCas_v5` family) directly on the Azure hypervisor. Bare metal deployments use layered images and hardware TEE features directly.
 
@@ -81,7 +85,7 @@ These scripts generate the cryptographic material and attestation reference valu
 
 ### Single cluster deployment (Azure)
 
-1. Set `main.clusterGroupName: simple` in `values-global.yaml`
+1. Set `main.clusterGroupName: azure` in `values-global.yaml`
 2. Ensure your Azure configuration is populated in `values-global.yaml` (see `global.azure.*` fields)
 3. `./pattern.sh make install`
 4. Wait for the cluster to reboot all nodes (the sandboxed containers operator triggers a MachineConfig update). Monitor progress in the ArgoCD UI.
@@ -92,17 +96,20 @@ These scripts generate the cryptographic material and attestation reference valu
 2. Deploy the hub cluster: `./pattern.sh make install`
 3. Wait for ACM (`MultiClusterHub`) to reach `Running` state on the hub
 4. Provision a second OpenShift 4.19.28+ cluster on Azure for the spoke
-5. Import the spoke into ACM with label `clusterGroup=spoke`
+5. Import the spoke into ACM with label `clusterGroup=azure-spoke`
    (see [importing a cluster](https://validatedpatterns.io/learn/importing-a-cluster/))
-6. ACM will automatically deploy the `spoke` clusterGroup applications (sandboxed containers, workloads) to the imported cluster
+6. ACM will automatically deploy the `azure-spoke` clusterGroup applications (sandboxed containers, workloads) to the imported cluster
 
 ### Bare metal deployment
 
 1. Set `main.clusterGroupName: baremetal` in `values-global.yaml`
-2. Run `bash scripts/gen-secrets.sh` to generate KBS keys and PCCS secrets
-3. For Intel TDX: uncomment the PCCS secrets in `~/values-secret-coco-pattern.yaml` and provide your Intel PCS API key
-4. `./pattern.sh make install`
-5. Wait for the cluster to reboot nodes (MachineConfig updates for TDX kernel parameters and vsock)
+2. Set `global.hardware.profile` to match your hardware (default: `intel-tdx`)
+   - Run `make detect-hardware` after NFD is deployed to detect your hardware profile automatically
+   - Options: `intel-tdx`, `amd-snp`, `intel-tdx-gpu`, `amd-snp-gpu`
+3. Run `bash scripts/gen-secrets.sh` to generate KBS keys and PCCS secrets
+4. For Intel TDX: uncomment the PCCS secrets in `~/values-secret-coco-pattern.yaml` and provide your Intel PCS API key
+5. `./pattern.sh make install`
+6. Wait for the cluster to reboot nodes (MachineConfig updates for TDX/SEV-SNP kernel parameters and vsock)
 
 > **Note:** Bare metal support is currently tested on SNO (Single Node OpenShift) configurations. Multi-node bare metal clusters are expected to work but have not been validated yet.
 
@@ -117,20 +124,15 @@ The system auto-detects your hardware:
 
 Optional: pin PCCS to a specific node with `bash scripts/get-pccs-node.sh` and set `baremetal.pccs.nodeSelector` in the baremetal chart values.
 
-### Bare metal GPU deployment
+For GPU-enabled deployments (`intel-tdx-gpu` or `amd-snp-gpu` profiles):
 
-1. Set `main.clusterGroupName: baremetal-gpu` in `values-global.yaml`
-2. Run `bash scripts/gen-secrets.sh` to generate KBS keys and PCCS secrets
-3. For Intel TDX: uncomment the PCCS secrets in `~/values-secret-coco-pattern.yaml` and provide your Intel PCS API key
-4. `./pattern.sh make install`
-5. Wait for the cluster to reboot nodes (MachineConfig updates for TDX/SEV-SNP kernel parameters, vsock, and IOMMU)
-6. Approve the GPU Operator install plan when it appears (uses `installPlanApproval: Manual`)
-
-> **Note:** The `baremetal-gpu` topology deploys IOMMU MachineConfig on all nodes and will trigger reboots. For clusters without GPUs, use the `baremetal` topology instead. The GPU workload deployment will remain Pending on non-GPU systems but is otherwise harmless.
+- IOMMU MachineConfig is deployed on all nodes and will trigger reboots
+- Approve the GPU Operator install plan when it appears (uses `installPlanApproval: Manual`)
+- A sample CUDA workload (`gpu-workload`) is deployed for CC GPU verification
 
 ## Sample applications
 
-Two sample applications are deployed on the cluster running confidential workloads (the single cluster in `simple` mode, or the spoke in multi-cluster mode):
+Two sample applications are deployed on the cluster running confidential workloads (the single cluster in `azure` mode, or the spoke in multi-cluster mode):
 
 - **hello-openshift**: Three pods demonstrating CoCo security boundaries:
   - `standard` — a regular Kubernetes pod (no confidential computing)

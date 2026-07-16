@@ -1,4 +1,7 @@
-# This is currently configured as an 'all in one' deployment in one cluster.
+# Multi-cluster hub topology for confidential containers.
+# Deploys Trustee (KBS + attestation), HashiCorp Vault, ACM, and cert-manager.
+# Manages spoke clusters imported via ACM with the azure-spoke clusterGroup.
+# Set main.clusterGroupName: trusted-hub in values-global.yaml to use.
 
 clusterGroup:
   name: trusted-hub
@@ -6,16 +9,23 @@ clusterGroup:
   namespaces:
   - open-cluster-management
   - vault
-  - golang-external-secrets
+  - external-secrets-operator:
+      operatorGroup: true
+      targetNamespaces: []
+  - external-secrets
   - trustee-operator-system
   - cert-manager-operator
   - openshift-sandboxed-containers-operator
   - cert-manager
   subscriptions:
-    # ACM is kept anticipating 
+    # ACM is kept anticipating
     acm:
       name: advanced-cluster-management
       namespace: open-cluster-management
+    eso:
+      name: openshift-external-secrets-operator
+      namespace: external-secrets-operator
+      channel: stable-v1
     trustee:
       name: trustee-operator
       namespace: trustee-operator-system
@@ -32,7 +42,7 @@ clusterGroup:
   - hub
   - vault
   - trustee
-  - golang-external-secrets
+  - external-secrets
   - sandbox
   - workloads
   - default
@@ -40,6 +50,7 @@ clusterGroup:
   # We can use self-referential variables because the chart calls the tpl function with these variables defined
   sharedValueFiles:
   - '/overrides/values-{{ $.Values.global.clusterPlatform }}.yaml'
+  - '/overrides/values-{{ $.Values.global.clusterVersion }}.yaml'
   applications:
     acm:
       name: acm
@@ -56,20 +67,23 @@ clusterGroup:
       chartVersion: 0.1.*
 
     secrets-operator:
-      name: golang-external-secrets
-      namespace: golang-external-secrets
-      project: golang-external-secrets
-      chart: golang-external-secrets
-      chartVersion: 0.1.*
+      name: openshift-external-secrets
+      namespace: external-secrets
+      project: external-secrets
+      chart: openshift-external-secrets
+      chartVersion: 0.0.*
 
     trustee:
       name: trustee
       namespace: trustee-operator-system #upstream config
       project: trustee
       chart: trustee
-      chartVersion: 0.7.*
+      chartVersion: 0.8.*
       extraValueFiles:
         - '/overrides/values-trustee.yaml'
+      overrides:
+        - name: global.coco.secured
+          value: "true"
     sandbox-policies:
       name: sandbox-policies
       namespace: openshift-sandboxed-containers-operator #upstream config
@@ -84,10 +98,9 @@ clusterGroup:
 
 
   imperative:
-    image: ghcr.io/butler54/imperative-container:latest
     jobs:
-    - name: install-deps
-      playbook: ansible/install-deps.yaml
+    - name: get-azure-deps
+      playbook: ansible/get-azure-deps.yaml
       verbosity: -vvv
       timeout: 3600
     - name: configure-azure-dns
@@ -99,11 +112,11 @@ clusterGroup:
       verbosity: -vvv
       timeout: 3600
   managedClusterGroups:
-    spoke:
-      name: spoke
+    azure-spoke:
+      name: azure-spoke
       acmlabels:
       - name: clusterGroup
-        value: spoke
+        value: azure-spoke
       helmOverrides:
       - name: clusterGroup.isHubCluster
         value: false

@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kbs-access-curl
+  labels:
+    app: kbs-access-curl
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kbs-access-curl
+  template:
+    metadata:
+      labels:
+        app: kbs-access-curl
+      annotations:
+        peerpods: "true"
+        coco.io/initdata-configmap: debug-initdata
+        {{- if .Values.defaultMemory }}
+        io.katacontainers.config.hypervisor.default_memory: {{ .Values.defaultMemory | quote }}
+        {{- end }}
+        io.katacontainers.config.runtime.create_container_timeout: "900"
+    spec:
+      runtimeClassName: {{ .Values.global.coco.runtimeClassName }}
+      containers:
+        - name: httpd
+          image: registry.redhat.io/ubi9/httpd-24@sha256:68a91ff691092f455fea682330c499588747231c16516cd4f35aff821e6847f2
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+          - name: shared-volume
+            mountPath: /var/www/html
+          - name: initdata
+            mountPath: /opt/confidential-containers/initdata
+            readOnly: true
+      initContainers:
+      - name: curl
+        image: registry.access.redhat.com/ubi9/ubi:latest
+        command: ['sh', '-c', 'curl -s http://127.0.0.1:8006/cdh/resource/default/kbsres1/key3 > /var/www/html/secret.txt']
+        volumeMounts:
+        - name: shared-volume
+          mountPath: /var/www/html
+      volumes:
+      - name: shared-volume
+        emptyDir: {}
+      - name: initdata
+        configMap:
+          name: debug-initdata
+          optional: false

@@ -1,16 +1,26 @@
-# This is currently configured as an 'all in one' deployment in one cluster.
+# Azure spoke topology for confidential containers (multi-cluster).
+# Runs sandboxed containers operator and confidential workloads.
+# Paired with trusted-hub topology — spoke is imported into ACM from the hub.
+# Set main.clusterGroupName: azure-spoke in values-global.yaml on the spoke cluster.
 
 clusterGroup:
-  name: spoke
+  name: azure-spoke
   isHubCluster: false
   namespaces:
-  - golang-external-secrets
+  - external-secrets-operator:
+      operatorGroup: true
+      targetNamespaces: []
+  - external-secrets
   - openshift-sandboxed-containers-operator
   - hello-openshift
   - kbs-access
   - cert-manager-operator
   subscriptions:
-    # ACM is kept anticipating 
+    # ACM is kept anticipating
+    eso:
+      name: openshift-external-secrets-operator
+      namespace: external-secrets-operator
+      channel: stable-v1
     sandbox:
       name: sandboxed-containers-operator
       namespace: openshift-sandboxed-containers-operator
@@ -27,7 +37,7 @@ clusterGroup:
   - hub
   - vault
   - trustee
-  - golang-external-secrets
+  - external-secrets
   - sandbox
   - workloads
   - default
@@ -35,14 +45,15 @@ clusterGroup:
   # We can use self-referential variables because the chart calls the tpl function with these variables defined
   sharedValueFiles:
   - '/overrides/values-{{ $.Values.global.clusterPlatform }}.yaml'
+  - '/overrides/values-{{ $.Values.global.clusterVersion }}.yaml'
   applications:
 
     secrets-operator:
-      name: golang-external-secrets
-      namespace: golang-external-secrets
-      project: golang-external-secrets
-      chart: golang-external-secrets
-      chartVersion: 0.1.*
+      name: openshift-external-secrets
+      namespace: external-secrets
+      project: external-secrets
+      chart: openshift-external-secrets
+      chartVersion: 0.0.*
 
     sandbox:
       name: sandbox
@@ -71,10 +82,9 @@ clusterGroup:
       path: charts/coco-supported/kbs-access
 
   imperative:
-    image: ghcr.io/butler54/imperative-container:latest
     jobs:
-    - name: install-deps
-      playbook: ansible/install-deps.yaml
+    - name: get-azure-deps
+      playbook: ansible/get-azure-deps.yaml
       verbosity: -vvv
       timeout: 3600
     - name: configure-azure-nat-gateway

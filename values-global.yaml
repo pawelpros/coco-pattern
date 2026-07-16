@@ -1,6 +1,7 @@
 global:
   pattern: coco-pattern
   storageProvider: hpp  # Options: hpp, lvm, external
+  clusterVersion: "4.21"  # OCP minor version for operator pins. Options: 4.19, 4.20, 4.21
   secretStore:
     # Warning: This must be present even if it is set to none.
     backend: vault # none, vault, kubernetes
@@ -12,7 +13,8 @@ global:
   # This defines whether or not to use upstream resources for CoCo.
   # Defines whether or not the hub cluster can be used for confidential containers
   coco:
-    securityPolicyFlavour: "insecure" # insecure, signed or reject is expected.
+    runtimeClassName: "kata-cc" # kata-cc (baremetal), kata-remote (Azure/AWS), kata-cc-nvidia-gpu (GPU)
+    securityPolicyFlavour: "insecure" # insecure, redhat-secure-gpg, redhat-secure-sigstore, signed or reject
     secured: true # true or false. If true, the cluster will be secured. If false, the cluster will be insecure.
     bypassAttestation: false
     # Enable SSH key injection into podvm for debugging. Do not enable in production.
@@ -22,17 +24,25 @@ global:
     azure:
       defaultVMFlavour: "Standard_DC2as_v5"
       VMFlavours: "Standard_DC2as_v5,Standard_DC4as_v5,Standard_DC8as_v5,Standard_DC16as_v5"
+  hardware:
+    profile: intel-tdx  # Options: intel-tdx, amd-snp, intel-tdx-gpu, amd-snp-gpu
 main:
-  # WARNING
-  # This default configuration uses a single cluster on azure.
-  # It fundamentally violates the separation of duties.
-  clusterGroupName: simple
+  # Set clusterGroupName to match your deployment topology:
+  #   azure         — Azure single-cluster (all components in one cluster)
+  #   azure-spoke   — Azure spoke (multi-cluster, imported into ACM from trusted-hub)
+  #   baremetal     — Bare metal (Intel TDX / AMD SEV-SNP, hardware profile gated)
+  #   trusted-hub   — Hub for multi-cluster (Trustee + ACM, manages spoke clusters)
+  clusterGroupName: azure
+  singleArgoCD: true
   multiSourceConfig:
     enabled: true
     clusterGroupChartVersion: 0.9.*
 
-# Common secret store configuration used across multiple charts
-# Warning do not rely on this. it does not consistently apply.
+# Common secret store configuration used across multiple charts.
+# NOTE: Charts reference secretStore.* (top-level, not global.secretStore.*).
+# Top-level values do not propagate from values-global.yaml — each application
+# that needs secretStore must declare it via inline overrides in the topology file.
+# This is intentional — it allows different charts to use different secret stores.
 secretStore:
   name: vault-backend
   kind: ClusterSecretStore

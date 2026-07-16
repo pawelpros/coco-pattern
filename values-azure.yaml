@@ -1,14 +1,19 @@
-# This is currently configured as an 'all in one' deployment in one cluster.
+# Azure single-cluster topology for confidential containers.
+# Deploys all components (Trustee, Vault, ACM, sandboxed containers, workloads) in one cluster.
+# Set main.clusterGroupName: azure in values-global.yaml to use.
 
 clusterGroup:
-  name: simple
+  name: azure
   isHubCluster: true
   # Override health check for Subscriptions to treat UpgradePending as healthy
   # Only applies to pinned CSV subscriptions (sandbox and trustee)
   namespaces:
   - open-cluster-management
   - vault
-  - golang-external-secrets
+  - external-secrets-operator:
+      operatorGroup: true
+      targetNamespaces: []
+  - external-secrets
   - openshift-sandboxed-containers-operator
   - trustee-operator-system
   - hello-openshift
@@ -18,10 +23,14 @@ clusterGroup:
   - encrypted-storage
   - kyverno
   subscriptions:
-    # ACM is kept anticipating 
+    # ACM is kept anticipating
     acm:
       name: advanced-cluster-management
       namespace: open-cluster-management
+    eso:
+      name: openshift-external-secrets-operator
+      namespace: external-secrets-operator
+      channel: stable-v1
     sandbox:
       name: sandboxed-containers-operator
       namespace: openshift-sandboxed-containers-operator
@@ -45,7 +54,7 @@ clusterGroup:
   - hub
   - vault
   - trustee
-  - golang-external-secrets
+  - external-secrets
   - sandbox
   - workloads
   - default
@@ -53,6 +62,7 @@ clusterGroup:
   # We can use self-referential variables because the chart calls the tpl function with these variables defined
   sharedValueFiles:
   - '/overrides/values-{{ $.Values.global.clusterPlatform }}.yaml'
+  - '/overrides/values-{{ $.Values.global.clusterVersion }}.yaml'
   applications:
     acm:
       name: acm
@@ -69,19 +79,22 @@ clusterGroup:
       chartVersion: 0.1.*
 
     secrets-operator:
-      name: golang-external-secrets
-      namespace: golang-external-secrets
-      project: golang-external-secrets
-      chart: golang-external-secrets
-      chartVersion: 0.1.*
+      name: openshift-external-secrets
+      namespace: external-secrets
+      project: external-secrets
+      chart: openshift-external-secrets
+      chartVersion: 0.0.*
     trustee:
       name: trustee
       namespace: trustee-operator-system #upstream config
       project: trustee
       chart: trustee
-      chartVersion: 0.7.*
+      chartVersion: 0.8.*
       extraValueFiles:
         - '/overrides/values-trustee.yaml'
+      overrides:
+        - name: global.coco.secured
+          value: "true"
     sandbox:
       name: sandbox
       namespace: openshift-sandboxed-containers-operator #upstream config
@@ -137,6 +150,72 @@ clusterGroup:
           jsonPointers:
             - /metadata/labels
             - /metadata/annotations
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          name: deletingpolicies.policies.kyverno.io
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          name: generatingpolicies.policies.kyverno.io
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          name: imagevalidatingpolicies.policies.kyverno.io
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          name: mutatingpolicies.policies.kyverno.io
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          name: namespaceddeletingpolicies.policies.kyverno.io
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          name: namespacedgeneratingpolicies.policies.kyverno.io
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          name: namespacedimagevalidatingpolicies.policies.kyverno.io
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          name: namespacedmutatingpolicies.policies.kyverno.io
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          name: namespacedvalidatingpolicies.policies.kyverno.io
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          name: policyexceptions.policies.kyverno.io
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          name: validatingpolicies.policies.kyverno.io
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
       extraValueFiles:
         - '/overrides/values-kyverno.yaml'
 
@@ -153,16 +232,13 @@ clusterGroup:
     # imagePullPolicy is set to always: imperative.imagePullPolicy
     # For additional overrides that apply to the jobs, please refer to
     # https://validatedpatterns.io/imperative-actions/#additional-job-customizations
-    image: ghcr.io/butler54/imperative-container:latest
     jobs:
-    - name: install-deps
-      playbook: ansible/install-deps.yaml
+    - name: get-azure-deps
+      playbook: ansible/get-azure-deps.yaml
       verbosity: -vvv
       timeout: 3600
     - name: configure-azure-dns
       playbook: ansible/configure-issuer.yaml
-      # this image has not been changes. TBD would make sense 
-      #image: quay.io/hybridcloudpatterns/ansible-edge-gitops-ee:latest
       verbosity: -vvv
       timeout: 3600
     - name: configure-azure-nat-gateway
