@@ -24,14 +24,20 @@ clusterGroup:
   - openshift-nfd
   - baremetal
   - intel-dcap
+  - intel-dcap-operator-system:
+      operatorGroup: true
+      targetNamespaces: []
   - nvidia-gpu-operator
   - gpu-workload
   - kyverno
+  - kubevirt-vms
 
   subscriptions:
     acm:
       name: advanced-cluster-management
       namespace: open-cluster-management
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
     eso:
       name: openshift-external-secrets-operator
       namespace: external-secrets-operator
@@ -56,6 +62,8 @@ clusterGroup:
       name: openshift-cert-manager-operator
       namespace: cert-manager-operator
       channel: stable-v1
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
     lvm-operator:
       name: lvms-operator
       namespace: openshift-storage
@@ -67,18 +75,35 @@ clusterGroup:
       name: nfd
       namespace: openshift-nfd
       channel: stable
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
     intel-device-plugins:
       name: intel-device-plugins-operator
       namespace: openshift-operators
-      source: certified-operators
+      # Required for airgap -- set to your mirrored catalog source name
+      # source: cs-certified-operator-index-v4-22
       channel: stable
-    gpu-operator:
-      name: gpu-operator-certified
-      namespace: nvidia-gpu-operator
-      source: certified-operators
-      channel: v26.3
-      installPlanApproval: Manual
-      csv: gpu-operator-certified.v26.3.0
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
+    intel-tdx-dcap:
+      name: intel-tdx-dcap-operator
+      namespace: intel-dcap-operator-system
+      # Required for airgap -- set to your mirrored catalog source name
+      # source: cs-certified-operator-index-v4-22
+      channel: alpha
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
+    # GPU operator disabled — NVIDIA bundle image has oc-mirror signature issue.
+    # Re-enable when NVIDIA bundle is mirrored or upstream fix lands.
+    # gpu-operator:
+    #   name: gpu-operator-certified
+    #   namespace: nvidia-gpu-operator
+    #   source: cs-certified-operator-index-v4-22
+    #   channel: v26.3
+    #   installPlanApproval: Manual
+    #   csv: gpu-operator-certified.v26.3.0
+    #   annotations:
+    #     argocd.argoproj.io/sync-wave: "25"
   projects:
   - hub
   - vault
@@ -95,6 +120,7 @@ clusterGroup:
   - '/overrides/values-storage-{{ $.Values.global.storageProvider }}.yaml'
   - '/overrides/values-{{ $.Values.global.clusterVersion }}.yaml'
   - '/overrides/values-hw-{{ $.Values.global.hardware.profile }}.yaml'
+  - '/overrides/values-baremetal-airgap.yaml'
 
   extraObjects:
     wait-for-vault-unsealed:
@@ -108,7 +134,7 @@ clusterGroup:
           argocd.argoproj.io/sync-wave: "5"
       spec:
         backoffLimit: 10
-        activeDeadlineSeconds: 600
+        activeDeadlineSeconds: 1800
         template:
           spec:
             restartPolicy: OnFailure
@@ -138,6 +164,10 @@ clusterGroup:
       project: hub
       chart: acm
       chartVersion: 0.1.*
+      # Required for airgap -- set to your mirrored catalog source name
+      # overrides:
+      #   - name: acm.mce_operator.source
+      #     value: "cs-redhat-operator-index-v4-22"
 
     vault:
       name: vault
@@ -161,21 +191,37 @@ clusterGroup:
       name: trustee
       namespace: trustee-operator-system
       project: trustee
+      chart: trustee
+      chartVersion: 0.10.*
       annotations:
         argocd.argoproj.io/sync-wave: "20"
-      chart: trustee
-      chartVersion: 0.9.*
       extraValueFiles:
         - '/overrides/values-trustee.yaml'
       overrides:
+        # Enable attestation-gated secret delivery via KBS
         - name: global.coco.secured
           value: "true"
+        # TDX attestation — enables Intel TDX reference value verification in AS
         - name: kbs.tdx.enabled
           value: "true"
+        # GPU attestation — enables NVIDIA CC GPU reference value verification
         - name: kbs.gpu.enabled
           value: "true"
+        # Bare metal mode — uses firmware reference values (not peer-pod PCR measurements)
         - name: kbs.baremetal.enabled
           value: "true"
+        # Inject mirror-registry CA into KBS trust store (required for airgap image pulls)
+        - name: kbs.registryCa.enabled
+          value: "true"
+        # TDX DCAP collateral — offline attestation without Intel PCS network access.
+        # Collateral is collected via `make collect-dcap-collateral` and loaded into Vault.
+        # The file path below is where the AS container mounts the collateral from its ESO secret.
+        - name: kbs.tdx.collateralService
+          value: "file:///opt/confidential-containers/attestation-service/tdx/platform_collaterals.json"
+        - name: kbs.tdx.collateralMountPath
+          value: "/opt/confidential-containers/attestation-service/tdx"
+        - name: kbs.tdx.collateralFileName
+          value: "platform_collaterals.json"
 
     storage:
       name: storage
@@ -219,25 +265,59 @@ clusterGroup:
           name: sgxdeviceplugin-sample
           jsonPointers:
             - /spec
+        - group: trustedservices.intel.com
+          kind: TdxQuoteGenerationService
+          name: intel-tdx-dcap
+          jsonPointers:
+            - /spec
+            - /status
 
-    nvidia-gpu:
-      name: nvidia-gpu
-      namespace: nvidia-gpu-operator
-      project: hub
-      path: charts/all/nvidia-gpu
-      annotations:
-        argocd.argoproj.io/sync-wave: "10"
+    # KubeVirt confidential containers support (experimental)
+    # Deploys HyperConverged CR with TDX feature gate and SELinux MCO for QGS socket access.
+    # Requires Intel TDX hardware and CNV operator. Gated by chart-level values.
+    # Uncomment to enable:
+    # kubevirtconfidential:
+    #   name: kubevirtconfidential
+    #   namespace: openshift-cnv
+    #   project: hub
+    #   path: charts/all/kubevirtconfidential
+    #   annotations:
+    #     argocd.argoproj.io/sync-wave: "30"
 
-    gpu-workload:
-      name: gpu-workload
-      namespace: gpu-workload
-      project: workloads
-      path: charts/coco-supported/gpu-workload
-      annotations:
-        argocd.argoproj.io/sync-wave: "30"
-      syncPolicy:
-        automated:
-          prune: true
+    # KubeVirt test VMs (experimental)
+    # Baseline and TDX-enabled RHEL9 VMs for validating confidential VM workloads.
+    # Requires kubevirtconfidential above and LVM storage. Gated by chart-level values.
+    # Uncomment to enable:
+    # kubevirtvm:
+    #   name: kubevirtvm
+    #   namespace: kubevirt-vms
+    #   project: hub
+    #   path: charts/all/kubevirtvm
+    #   annotations:
+    #     argocd.argoproj.io/sync-wave: "35"
+    #   syncPolicy:
+    #     automated:
+    #       prune: true
+
+    # GPU apps disabled — depends on gpu-operator subscription (disabled above).
+    # nvidia-gpu:
+    #   name: nvidia-gpu
+    #   namespace: nvidia-gpu-operator
+    #   project: hub
+    #   path: charts/all/nvidia-gpu
+    #   annotations:
+    #     argocd.argoproj.io/sync-wave: "25"
+
+    # gpu-workload:
+    #   name: gpu-workload
+    #   namespace: gpu-workload
+    #   project: workloads
+    #   path: charts/coco-supported/gpu-workload
+    #   annotations:
+    #     argocd.argoproj.io/sync-wave: "30"
+    #   syncPolicy:
+    #     automated:
+    #       prune: true
 
     sandbox-policies:
       name: sandbox-policies
@@ -285,11 +365,9 @@ clusterGroup:
       name: kyverno
       namespace: kyverno
       project: hub
+      path: charts/vendor/kyverno
       annotations:
         argocd.argoproj.io/sync-wave: "0"
-      repoURL: https://kyverno.github.io/kyverno/
-      chart: kyverno
-      chartVersion: 3.7.*
       syncPolicy:
         automated: {}
         retry:
@@ -394,7 +472,13 @@ clusterGroup:
     # For additional overrides that apply to the jobs, please refer to
     # https://validatedpatterns.io/imperative-actions/#additional-job-customizations
     serviceAccountCreate: true
-    serviceAccountName: imperative-admin-sa
+    clusterRoleYaml:
+      - apiGroups:
+        - '*'
+        resources:
+        - '*'
+        verbs:
+        - '*'
     jobs:
     - name: init-data-gzipper
       playbook: ansible/init-data-gzipper.yaml

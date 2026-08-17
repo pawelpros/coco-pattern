@@ -1,7 +1,10 @@
 # Shared Kyverno chart overrides loaded via extraValueFiles.
 # OpenShift security context compatibility: null all securityContext fields.
 # Disable wgpolicyk8s CRDs and reports controller (not needed for coco-pattern).
-# Profile-specific overrides (backgroundController.resources) stay inline in values-<profile>.yaml.
+global:
+  image:
+    # Required for airgap -- set to your mirror registry host:port
+    registry: ""
 admissionController:
   container:
     securityContext: null

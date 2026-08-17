@@ -8,6 +8,8 @@ metadata:
     argocd.argoproj.io/sync-wave: "10"
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: kbs-access-curl
@@ -23,12 +25,17 @@ spec:
         {{- end }}
         io.katacontainers.config.runtime.create_container_timeout: "900"
     spec:
+      serviceAccountName: kbs-access-curl
       runtimeClassName: {{ .Values.global.coco.runtimeClassName }}
+      securityContext:
+        runAsUser: 0
       containers:
         - name: httpd
-          image: registry.redhat.io/ubi9/httpd-24@sha256:68a91ff691092f455fea682330c499588747231c16516cd4f35aff821e6847f2
+          image: {{ .Values.image }}
           ports:
             - containerPort: 8080
+          securityContext:
+            privileged: true
           volumeMounts:
           - name: shared-volume
             mountPath: /var/www/html
@@ -37,8 +44,10 @@ spec:
             readOnly: true
       initContainers:
       - name: curl
-        image: registry.access.redhat.com/ubi9/ubi:latest
+        image: {{ .Values.initImage }}
         command: ['sh', '-c', 'curl -s http://127.0.0.1:8006/cdh/resource/default/kbsres1/key3 > /var/www/html/secret.txt']
+        securityContext:
+          privileged: true
         volumeMounts:
         - name: shared-volume
           mountPath: /var/www/html

@@ -17,7 +17,71 @@ cache-keys: ## Download Red Hat signing keys from official sources to ~/.coco-pa
 	@echo "Done. Verify fingerprints at https://access.redhat.com/security/team/key/"
 
 
+.PHONY: cache-registry-ca
+cache-registry-ca: ## Copy mirror-registry CA cert to ~/.coco-pattern/ for use by load-secrets
+	@mkdir -p ~/.coco-pattern
+	@if [ -f ~/.coco-pattern/quay-ca-cert.pem ]; then \
+		mv ~/.coco-pattern/quay-ca-cert.pem ~/.coco-pattern/mirror-registry-ca-cert.pem; \
+		echo "  Migrated quay-ca-cert.pem -> mirror-registry-ca-cert.pem"; \
+	fi
+	@if [ -f ~/mirror-registry-certs/ca.crt ]; then \
+		cp ~/mirror-registry-certs/ca.crt ~/.coco-pattern/mirror-registry-ca-cert.pem; \
+		echo "  Cached mirror-registry CA at ~/.coco-pattern/mirror-registry-ca-cert.pem"; \
+	else \
+		echo "ERROR: ~/mirror-registry-certs/ca.crt not found."; \
+		echo "  Ensure the mirror registry was initialised and its certs are at ~/mirror-registry-certs/"; \
+		exit 1; \
+	fi
+
+.PHONY: load-bootstrap
+load-bootstrap: ## Load ArgoCD bootstrap secrets (DEL-2) — run after cluster exists but before Vault is up
+	@echo "Loading ArgoCD OCI Helm registry bootstrap secret..."
+	@if ! ./pattern.sh ansible-playbook rhvp.cluster_utils.load_bootstrap_secrets --list-tasks >/dev/null 2>&1; then \
+		echo "ERROR: load_bootstrap_secrets playbook not found in utility container."; \
+		echo "  Bump utility-container tag in imageset-config and re-mirror."; \
+		exit 1; \
+	fi
+	@echo "Pre-creating bootstrap secret target namespaces (avoids race with patterns-operator)..."
+	@python3 -c "\
+import yaml, os, pathlib; \
+pattern = yaml.safe_load(open('values-global.yaml'))['global']['pattern']; \
+search = [pathlib.Path(p) for p in [ \
+  os.environ.get('VALUES_SECRET', ''), \
+  os.path.expanduser(f'~/values-secret-{pattern}.yaml'), \
+  os.path.expanduser('~/values-secret.yaml'), \
+  'values-secret.yaml', \
+] if p]; \
+f = next((p for p in search if p.is_file()), None); \
+data = yaml.safe_load(f.read_text()) if f else {}; \
+[print(ns) for s in data.get('bootstrap_secrets',[]) for ns in s.get('targetNamespaces',[])] \
+" 2>/dev/null | \
+	  sort -u | xargs -I{} sh -c 'oc create namespace {} --dry-run=client -o yaml | oc apply -f - 2>/dev/null; true'
+	./pattern.sh ansible-playbook rhvp.cluster_utils.load_bootstrap_secrets
+
+.PHONY: gen-mirror-helm-secret
+gen-mirror-helm-secret: ## Generate mirror-registry Helm OCI password file from mirror-registry init output
+	@mkdir -p ~/.coco-pattern
+	@echo "Enter the mirror-registry password (from ~/mirror-registry-init.txt or ~/mirror-registry-output/init.json):"
+	@read -r MRPASS; printf '%s' "$$MRPASS" > ~/.coco-pattern/mirror-registry-password; chmod 600 ~/.coco-pattern/mirror-registry-password
+	@echo "  Saved to ~/.coco-pattern/mirror-registry-password"
+
+.PHONY: pck-register
+pck-register: ## Register PCK certificates with Intel PCS (requires INTEL_PCS_API_KEY)
+	@if [ -z "$(INTEL_PCS_API_KEY)" ]; then \
+		echo "ERROR: Set INTEL_PCS_API_KEY environment variable"; \
+		echo "  Usage: make pck-register INTEL_PCS_API_KEY=<key>"; \
+		exit 1; \
+	fi
+	@PCS_TOOL="$(HOME)/confidential-computing.tee.dcap/tools/PcsClientTool/pcsclient.py"; \
+	if [ ! -f "$$PCS_TOOL" ]; then \
+		echo "ERROR: PCS Client Tool not found at $$PCS_TOOL"; \
+		echo "  Clone: git clone https://github.com/intel/confidential-computing.tee.dcap ~/confidential-computing.tee.dcap"; \
+		exit 1; \
+	fi; \
+	cd "$$(dirname $$PCS_TOOL)" && python3 pcsclient.py -t register -k "$(INTEL_PCS_API_KEY)"
+
 ##@ Reference Value Collection
+
 .PHONY: collect-firmware-refvals
 collect-firmware-refvals: ## Collect firmware reference values (bare metal, default)
 	@scripts/collect-firmware-refvals.sh
@@ -25,6 +89,106 @@ collect-firmware-refvals: ## Collect firmware reference values (bare metal, defa
 .PHONY: collect-azure-refvals
 collect-azure-refvals: ## Collect PCR reference values (Azure)
 	@scripts/collect-firmware-refvals.sh --platform azure
+
+.PHONY: collect-dcap-collateral
+collect-dcap-collateral: ## Collect TDX DCAP collateral from Intel PCS (API key via OS keyring)
+	@scripts/collect-dcap-collateral.sh
+
+.PHONY: dcap-offline-provision
+dcap-offline-provision: ## Full DCAP offline provisioning workflow (collect collateral + load secrets)
+	$(MAKE) collect-dcap-collateral
+	$(MAKE) load-secrets
+
+##@ AMD SEV-SNP VCEK Provisioning
+
+.PHONY: snp-collect-vcek-urls
+snp-collect-vcek-urls: ## Collect VCEK URLs from AMD SNP nodes (requires KUBECONFIG)
+	@scripts/collect-snp-vcek-urls.sh
+
+.PHONY: snp-download-vcek
+snp-download-vcek: ## Download VCEK certs from AMD KDS (requires internet)
+	@scripts/download-snp-vcek.sh
+
+.PHONY: snp-gen-overrides
+snp-gen-overrides: ## Generate SNP VCEK values override from cached certs (local only)
+	@scripts/gen-snp-vcek-overrides.sh
+
+.PHONY: snp-offline-provision
+snp-offline-provision: snp-collect-vcek-urls snp-download-vcek snp-gen-overrides ## Full SNP VCEK offline provisioning
+
+##@ Disconnected Deployment
+MIRROR_REGISTRY ?= quay.example.com:443/mirror
+IMAGESET_CONFIG ?= airgap/imageset-config.yaml
+OC_MIRROR_WORKSPACE ?= file://$(HOME)/oc-mirror-workspace
+
+.PHONY: airgap-mirror
+airgap-mirror: ## Mirror content to disconnected registry (requires MIRROR_REGISTRY)
+	oc-mirror -c $(IMAGESET_CONFIG) \
+		--workspace $(OC_MIRROR_WORKSPACE) \
+		--dest-tls-verify=false \
+		docker://$(MIRROR_REGISTRY) --v2
+
+.PHONY: airgap-post-install
+airgap-post-install: ## Post-install bootstrap (after airgap-mirror + labctl apply-mirror-resources)
+	@scripts/airgap-post-install.sh
+
+.PHONY: airgap-deploy-pattern
+airgap-deploy-pattern: ## Deploy Pattern CR directly (skip pattern.sh, use values-global.yaml config)
+	@scripts/airgap-post-install.sh --deploy-pattern
+
+.PHONY: airgap-fix-manifests
+airgap-fix-manifests: ## Fix oc-mirror manifest list failures with fallback mirroring
+	@scripts/airgap-post-install.sh --fix-manifest-lists
+
+.PHONY: airgap-sync-repos
+airgap-sync-repos: ## Push working copy changes to bare HTTP repos and restart git server
+	@scripts/airgap-post-install.sh --sync-repos-only
+
+ARGOCD_CLI_DIR ?= $(HOME)/.local/bin
+
+.PHONY: argocd-install
+argocd-install: ## Download argocd CLI from the cluster's ArgoCD image into ~/.local/bin
+	@mkdir -p $(ARGOCD_CLI_DIR)
+	@ARGOCD_NS=$$(oc get argocd -A -o jsonpath='{.items[0].metadata.namespace}') || \
+		{ echo "ERROR: No ArgoCD instance found. Is KUBECONFIG set and the pattern deployed?"; exit 1; }; \
+	ARGOCD_IMG=$$(oc get deployment -n $$ARGOCD_NS -l app.kubernetes.io/component=server,app.kubernetes.io/part-of=argocd \
+		-o jsonpath='{.items[0].spec.template.spec.containers[0].image}') || \
+		{ echo "ERROR: Could not find ArgoCD server deployment in $$ARGOCD_NS"; exit 1; }; \
+	echo "Extracting argocd CLI from $$ARGOCD_IMG ..."; \
+	POD_NAME="argocd-cli-extract-$$$$"; \
+	oc run "$$POD_NAME" -n $$ARGOCD_NS --image="$$ARGOCD_IMG" \
+		--restart=Never --command -- sleep 300; \
+	echo "Waiting for extract pod..."; \
+	oc wait --for=condition=Ready pod/"$$POD_NAME" -n $$ARGOCD_NS --timeout=120s; \
+	oc cp "$$ARGOCD_NS/$$POD_NAME:/usr/local/bin/argocd" "$(ARGOCD_CLI_DIR)/argocd"; \
+	chmod +x "$(ARGOCD_CLI_DIR)/argocd"; \
+	oc delete pod "$$POD_NAME" -n $$ARGOCD_NS --force --grace-period=0 2>/dev/null; \
+	echo "Installed: $(ARGOCD_CLI_DIR)/argocd"; \
+	$(ARGOCD_CLI_DIR)/argocd version --client | head -1
+
+.PHONY: argocd-login
+argocd-login: ## Extract ArgoCD credentials from cluster and log in with argocd CLI
+	@ARGOCD_NS=$$(oc get argocd -A -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null) && \
+	ARGOCD_NAME=$$(oc get argocd -n $$ARGOCD_NS -o jsonpath='{.items[0].metadata.name}' 2>/dev/null) && \
+	ARGOCD_ROUTE=$$(oc get route $${ARGOCD_NAME}-server -n $$ARGOCD_NS -o jsonpath='{.spec.host}' 2>/dev/null) && \
+	ARGOCD_PASS=$$(oc get secret $${ARGOCD_NAME}-cluster -n $$ARGOCD_NS -o jsonpath='{.data.admin\.password}' 2>/dev/null | base64 -d) && \
+	echo "ArgoCD URL:  https://$$ARGOCD_ROUTE" && \
+	echo "Username:    admin" && \
+	echo "Password:    $$ARGOCD_PASS" && \
+	echo "" && \
+	if command -v argocd >/dev/null 2>&1; then \
+		oc config set-context --current --namespace=$$ARGOCD_NS && \
+		argocd login --core && \
+		echo "" && \
+		echo "Logged in (core mode, namespace $$ARGOCD_NS)." && \
+		echo "Usage: argocd app list"; \
+	else \
+		echo "argocd CLI not installed. To install:" && \
+		echo "  curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64" && \
+		echo "  chmod +x /usr/local/bin/argocd" && \
+		echo "" && \
+		echo "Or use the web UI at: https://$$ARGOCD_ROUTE"; \
+	fi
 
 ##@ Hardware Detection
 .PHONY: detect-hardware
@@ -59,3 +223,16 @@ detect-hardware: ## Detect hardware profile from cluster nodes (requires KUBECON
 	fi && \
 	echo "" && \
 	echo "To apply: edit values-global.yaml and set global.hardware.profile to the recommended value."
+
+##@ Chart Management
+KYVERNO_VERSION ?= 3.7.2
+KYVERNO_REPO ?= https://kyverno.github.io/kyverno/
+
+.PHONY: update-kyverno-chart
+update-kyverno-chart: ## Pull and embed upstream Kyverno Helm chart (requires internet)
+	@echo "Pulling kyverno chart v$(KYVERNO_VERSION)..."
+	@rm -rf charts/vendor/kyverno
+	@helm pull kyverno --repo $(KYVERNO_REPO) --version $(KYVERNO_VERSION) --untar -d charts/vendor/
+	@find charts/vendor/kyverno -name "README.md" -o -name "README.md.gotmpl" | xargs rm -f
+	@echo "Embedded charts/vendor/kyverno (v$(KYVERNO_VERSION))"
+	@echo "Next: commit, push, and sync ArgoCD"
