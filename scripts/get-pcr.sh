@@ -92,8 +92,8 @@ IMAGE=${VERITY_IMAGE}@${TAG}
 
 echo "IMAGE: $IMAGE"
 
-curl -L https://tuf-default.apps.rosa.rekor-prod.2jng.p3.openshiftapps.com/targets/rekor.pub -o rekor.pub
-curl -L https://security.access.redhat.com/data/63405576.txt -o cosign-pub-key.pem
+curl -kL https://tuf-default.apps.rosa.rekor-prod.2jng.p3.openshiftapps.com/targets/rekor.pub -o rekor.pub
+curl -kL https://security.access.redhat.com/data/63405576.txt -o cosign-pub-key.pem
 # export REGISTRY_AUTH_FILE=${PULL_SECRET_PATH}
 # echo "REGISTRY_AUTH_FILE: $REGISTRY_AUTH_FILE"
 # export SIGSTORE_REKOR_PUBLIC_KEY=${PWD}/rekor.pub

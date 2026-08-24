@@ -6,6 +6,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "25"
 spec:
   platformRegistration:
-    Offline: {}
+    Online:
+      apiKeySecretName: intel-pcs-api-key
   nodeSelector:
     - "intel.feature.node.kubernetes.io/sgx=true"
