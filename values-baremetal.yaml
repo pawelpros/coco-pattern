@@ -42,6 +42,8 @@ clusterGroup:
       name: openshift-external-secrets-operator
       namespace: external-secrets-operator
       channel: stable-v1
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
     sandbox:
       name: sandboxed-containers-operator
       namespace: openshift-sandboxed-containers-operator
@@ -67,10 +69,14 @@ clusterGroup:
     lvm-operator:
       name: lvms-operator
       namespace: openshift-storage
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
     cnv:
       name: kubevirt-hyperconverged
       namespace: openshift-cnv
       channel: stable
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
     nfd:
       name: nfd
       namespace: openshift-nfd
@@ -84,7 +90,7 @@ clusterGroup:
       # source: cs-certified-operator-index-v4-22
       channel: stable
       annotations:
-        argocd.argoproj.io/sync-wave: "10"
+        argocd.argoproj.io/sync-wave: "60"
     intel-tdx-dcap:
       name: intel-tdx-dcap-operator
       namespace: intel-dcap-operator-system
@@ -92,7 +98,7 @@ clusterGroup:
       # source: cs-certified-operator-index-v4-22
       channel: alpha
       annotations:
-        argocd.argoproj.io/sync-wave: "10"
+        argocd.argoproj.io/sync-wave: "60"
     # GPU operator disabled — NVIDIA bundle image has oc-mirror signature issue.
     # Re-enable when NVIDIA bundle is mirrored or upstream fix lands.
     gpu-operator:
@@ -103,7 +109,7 @@ clusterGroup:
       installPlanApproval: Manual
       csv: gpu-operator-certified.v26.3.0
       annotations:
-        argocd.argoproj.io/sync-wave: "25"
+        argocd.argoproj.io/sync-wave: "80"
   projects:
   - hub
   - vault
@@ -131,7 +137,7 @@ clusterGroup:
         annotations:
           argocd.argoproj.io/hook: Sync
           argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
-          argocd.argoproj.io/sync-wave: "5"
+          argocd.argoproj.io/sync-wave: "30"
       spec:
         backoffLimit: 10
         activeDeadlineSeconds: 1800
@@ -164,6 +170,8 @@ clusterGroup:
       project: hub
       chart: acm
       chartVersion: 0.1.*
+      annotations:
+        argocd.argoproj.io/sync-wave: "30"
       # Required for airgap -- set to your mirrored catalog source name
       # overrides:
       #   - name: acm.mce_operator.source
@@ -176,7 +184,7 @@ clusterGroup:
       chart: hashicorp-vault
       chartVersion: 0.1.*
       annotations:
-        argocd.argoproj.io/sync-wave: "0"
+        argocd.argoproj.io/sync-wave: "25"
 
     secrets-operator:
       name: openshift-external-secrets
@@ -185,7 +193,7 @@ clusterGroup:
       chart: openshift-external-secrets
       chartVersion: 0.0.*
       annotations:
-        argocd.argoproj.io/sync-wave: "0"
+        argocd.argoproj.io/sync-wave: "35"
 
     trustee:
       name: trustee
@@ -194,7 +202,7 @@ clusterGroup:
       chart: trustee
       chartVersion: 0.10.*
       annotations:
-        argocd.argoproj.io/sync-wave: "20"
+        argocd.argoproj.io/sync-wave: "50"
       extraValueFiles:
         - '/overrides/values-trustee.yaml'
       overrides:
@@ -229,7 +237,7 @@ clusterGroup:
       project: hub
       path: charts/hub/storage
       annotations:
-        argocd.argoproj.io/sync-wave: "0"
+        argocd.argoproj.io/sync-wave: "20"
 
     baremetal:
       name: baremetal
@@ -237,14 +245,14 @@ clusterGroup:
       project: hub
       path: charts/all/baremetal
       annotations:
-        argocd.argoproj.io/sync-wave: "10"
+        argocd.argoproj.io/sync-wave: "20"
 
     sandbox:
       name: sandbox
       namespace: openshift-sandboxed-containers-operator
       project: sandbox
       annotations:
-        argocd.argoproj.io/sync-wave: "10"
+        argocd.argoproj.io/sync-wave: "30"
       chart: sandboxed-containers
       chartVersion: 0.2.*
       overrides:
@@ -258,7 +266,7 @@ clusterGroup:
       project: hub
       path: charts/all/intel-dcap
       annotations:
-        argocd.argoproj.io/sync-wave: "20"
+        argocd.argoproj.io/sync-wave: "70"
       ignoreDifferences:
         - group: deviceplugin.intel.com
           kind: SgxDevicePlugin
@@ -306,7 +314,7 @@ clusterGroup:
       project: hub
       path: charts/all/nvidia-gpu
       annotations:
-        argocd.argoproj.io/sync-wave: "25"
+        argocd.argoproj.io/sync-wave: "85"
 
     gpu-workload:
       name: gpu-workload
@@ -314,7 +322,7 @@ clusterGroup:
       project: workloads
       path: charts/coco-supported/gpu-workload
       annotations:
-        argocd.argoproj.io/sync-wave: "30"
+        argocd.argoproj.io/sync-wave: "90"
       syncPolicy:
         automated:
           prune: true
@@ -326,7 +334,7 @@ clusterGroup:
       chart: sandboxed-policies
       chartVersion: 0.2.*
       annotations:
-        argocd.argoproj.io/sync-wave: "20"
+        argocd.argoproj.io/sync-wave: "30"
 
     hello-openshift:
       name: hello-openshift
@@ -334,7 +342,7 @@ clusterGroup:
       project: workloads
       path: charts/coco-supported/hello-openshift
       annotations:
-        argocd.argoproj.io/sync-wave: "30"
+        argocd.argoproj.io/sync-wave: "70"
       # Required for airgap — CoCo guest VMs pull images directly, no IDMS/ITMS in the CVM.
       # Uncomment and set MIRROR_REGISTRY_HOST to your mirror registry.
       # overrides:
@@ -350,7 +358,7 @@ clusterGroup:
       project: workloads
       path: charts/coco-supported/kbs-access-curl
       annotations:
-        argocd.argoproj.io/sync-wave: "30"
+        argocd.argoproj.io/sync-wave: "70"
       # Required for airgap — CoCo guest VMs pull images directly, no IDMS/ITMS in the CVM.
       # overrides:
       #   - name: image
@@ -367,7 +375,7 @@ clusterGroup:
       project: workloads
       path: charts/coco-supported/kbs-access-sealed
       annotations:
-        argocd.argoproj.io/sync-wave: "30"
+        argocd.argoproj.io/sync-wave: "70"
       # Required for airgap — CoCo guest VMs pull images directly, no IDMS/ITMS in the CVM.
       # overrides:
       #   - name: image
@@ -477,7 +485,7 @@ clusterGroup:
       project: sandbox
       path: charts/all/coco-kyverno-policies
       annotations:
-        argocd.argoproj.io/sync-wave: "20"
+        argocd.argoproj.io/sync-wave: "30"
 
   imperative:
     # NOTE: We *must* use lists and not hashes. As hashes lose ordering once parsed by helm
