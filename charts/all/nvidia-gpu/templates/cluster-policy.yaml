@@ -80,7 +80,7 @@ spec:
   operator:
     defaultRuntime: crio
     initContainer: {}
-    runtimeClass: nvidia
+    runtimeClass: {{ .Values.operator.runtimeClass | default "nvidia" | quote }}
     use_ocp_driver_toolkit: true
   kataSandboxDevicePlugin:
     enabled: {{ .Values.kataSandboxDevicePlugin.enabled }}

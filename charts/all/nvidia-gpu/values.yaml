@@ -4,6 +4,11 @@ ccManager:
   enabled: true
   defaultMode: "on"
 
+operator:
+  # Use the standard host runtime for operator pods. The bare-metal CoCo cluster
+  # does expose a `nvidia` runtime handler, so keep the GPU operator on it.
+  runtimeClass: "kata-cc-nvidia-gpu"
+
 kataSandboxDevicePlugin:
   enabled: true
 
