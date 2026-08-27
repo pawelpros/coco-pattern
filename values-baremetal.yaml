@@ -86,19 +86,20 @@ clusterGroup:
     intel-device-plugins:
       name: intel-device-plugins-operator
       namespace: openshift-operators
-      # Required for airgap -- set to your mirrored catalog source name
-      # source: cs-certified-operator-index-v4-22
+      source: certified-operators
+      sourceNamespace: openshift-marketplace
       channel: stable
       annotations:
-        argocd.argoproj.io/sync-wave: "60"
+        argocd.argoproj.io/sync-wave: "95"
     intel-tdx-dcap:
       name: intel-tdx-dcap-operator
       namespace: intel-dcap-operator-system
-      # Required for airgap -- set to your mirrored catalog source name
-      # source: cs-certified-operator-index-v4-22
+      source: certified-operators
+      sourceNamespace: openshift-marketplace
       channel: alpha
+      csv: intel-tdx-dcap-operator.v0.1.0
       annotations:
-        argocd.argoproj.io/sync-wave: "60"
+        argocd.argoproj.io/sync-wave: "95"
     # GPU operator disabled — NVIDIA bundle image has oc-mirror signature issue.
     # Re-enable when NVIDIA bundle is mirrored or upstream fix lands.
     gpu-operator:
@@ -109,7 +110,7 @@ clusterGroup:
       installPlanApproval: Manual
       csv: gpu-operator-certified.v26.3.0
       annotations:
-        argocd.argoproj.io/sync-wave: "80"
+        argocd.argoproj.io/sync-wave: "95"
   projects:
   - hub
   - vault
@@ -270,7 +271,7 @@ clusterGroup:
       project: hub
       path: charts/all/intel-dcap
       annotations:
-        argocd.argoproj.io/sync-wave: "70"
+        argocd.argoproj.io/sync-wave: "96"
       ignoreDifferences:
         - group: deviceplugin.intel.com
           kind: SgxDevicePlugin
