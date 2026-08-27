@@ -100,15 +100,16 @@ clusterGroup:
       csv: intel-tdx-dcap-operator.v0.1.0
       annotations:
         argocd.argoproj.io/sync-wave: "95"
-    # GPU operator disabled — NVIDIA bundle image has oc-mirror signature issue.
-    # Re-enable when NVIDIA bundle is mirrored or upstream fix lands.
+    # GPU operator — NVIDIA bundle pulled from certified-operators catalog.
+    # Channel and CSV verified against: oc get packagemanifest gpu-operator-certified
     gpu-operator:
       name: gpu-operator-certified
       namespace: nvidia-gpu-operator
-      # source: cs-certified-operator-index-v4-22
-      channel: v26.3
+      source: certified-operators
+      sourceNamespace: openshift-marketplace
+      channel: v26.7
       installPlanApproval: Manual
-      csv: gpu-operator-certified.v26.3.0
+      csv: gpu-operator-certified.v26.7.0
       annotations:
         argocd.argoproj.io/sync-wave: "95"
   projects:
