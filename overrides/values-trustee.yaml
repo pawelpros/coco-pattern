@@ -6,6 +6,7 @@ kbs:
     format: "v1.1"
   https:
     enabled: false
+  workerCount: 1
   secretResources:
     - name: "kbsres1"
       key: "secret/data/hub/kbsres1"
