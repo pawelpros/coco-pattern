@@ -219,17 +219,17 @@ clusterGroup:
         - name: kbs.baremetal.enabled
           value: "true"
         # Inject mirror-registry CA into KBS trust store (required for airgap image pulls)
-        - name: kbs.registryCa.enabled
-          value: "true"
+        # - name: kbs.registryCa.enabled
+        #   value: "true"
         # TDX DCAP collateral — offline attestation without Intel PCS network access.
         # Collateral is collected via `make collect-dcap-collateral` and loaded into Vault.
         # The file path below is where the AS container mounts the collateral from its ESO secret.
-        - name: kbs.tdx.collateralService
-          value: "file:///opt/confidential-containers/attestation-service/tdx/platform_collaterals.json"
-        - name: kbs.tdx.collateralMountPath
-          value: "/opt/confidential-containers/attestation-service/tdx"
-        - name: kbs.tdx.collateralFileName
-          value: "platform_collaterals.json"
+        # - name: kbs.tdx.collateralService
+        #   value: "file:///opt/confidential-containers/attestation-service/tdx/platform_collaterals.json"
+        # - name: kbs.tdx.collateralMountPath
+        #   value: "/opt/confidential-containers/attestation-service/tdx"
+        # - name: kbs.tdx.collateralFileName
+        #   value: "platform_collaterals.json"
 
     storage:
       name: storage
