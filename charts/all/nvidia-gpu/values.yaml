@@ -5,9 +5,10 @@ ccManager:
   defaultMode: "on"
 
 operator:
-  # Use the standard host runtime for operator pods. The bare-metal CoCo cluster
-  # does expose a `nvidia` runtime handler, so keep the GPU operator on it.
-  runtimeClass: "kata-cc-nvidia-gpu"
+  # Leave empty so GPU operator infrastructure pods use the cluster default runtime (crun).
+  # The CRI-O `nvidia` handler is not configured on this bare-metal CoCo node.
+  # CoCo GPU workloads use runtimeClassName: kata-cc-nvidia-gpu (set per-workload).
+  runtimeClass: ""
 
 kataSandboxDevicePlugin:
   enabled: true

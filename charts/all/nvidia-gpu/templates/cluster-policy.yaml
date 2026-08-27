@@ -80,7 +80,9 @@ spec:
   operator:
     defaultRuntime: crio
     initContainer: {}
-    runtimeClass: {{ .Values.operator.runtimeClass | default "nvidia" | quote }}
+{{- if .Values.operator.runtimeClass }}
+    runtimeClass: {{ .Values.operator.runtimeClass | quote }}
+{{- end }}
     use_ocp_driver_toolkit: true
   kataSandboxDevicePlugin:
     enabled: {{ .Values.kataSandboxDevicePlugin.enabled }}
@@ -94,7 +96,7 @@ spec:
     enabled: true
     mode: kata
   toolkit:
-    enabled: false
+    enabled: false # This is the nvidia toolkit responsible for adding runtimeclass nvidia to crio - it's disabled
     installDir: /usr/local/nvidia
   validator:
     plugin:
