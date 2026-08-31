@@ -96,7 +96,7 @@ spec:
     enabled: true
     mode: kata
   toolkit:
-    enabled: false # This is the nvidia toolkit responsible for adding runtimeclass nvidia to crio - it's disabled
+    enabled: true # This is the nvidia toolkit responsible for adding runtimeclass nvidia to crio - it's disabled
     installDir: /usr/local/nvidia
   validator:
     plugin:
